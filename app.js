@@ -29,8 +29,8 @@ export function getUserData(db, user) {
 export function renderSidebar(ud, activePage) {
   const isAdmin = ud.role === 'admin';
   const pages = isAdmin
-    ? [['admin.html','📋','所有客訴'],['account.html','👥','帳號管理']]
-    : [['submit.html','📝','提交客訴'],['my.html','📋','我的客訴']];
+    ? [['admin.html','📋','所有客訴']]
+    : [['submit.html','📝','提交客訴']];
 
   const nav = document.getElementById('sb-nav');
   if (nav) {
