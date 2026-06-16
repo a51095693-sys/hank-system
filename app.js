@@ -14,10 +14,14 @@ export function showToast(msg, type = '') {
   setTimeout(() => { t.className = 'toast'; }, 2800);
 }
 
+const ADMIN_EMAILS = ['a51095693@complaint.local'];
+
 export async function getUserData(db, user) {
   const cacheKey = 'ud_' + user.uid;
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  const idNo = user.email.split('@')[0];
+  const defaultRole = ADMIN_EMAILS.includes(user.email) ? 'admin' : 'employee';
   try {
     const snap = await getDoc(doc(db, 'users', user.uid));
     if (snap.exists()) {
@@ -25,14 +29,12 @@ export async function getUserData(db, user) {
       sessionStorage.setItem(cacheKey, JSON.stringify(data));
       return data;
     }
-    const idNo = user.email.split('@')[0];
-    const userData = { name: idNo, idNo, email: user.email, role: 'employee', createdAt: new Date() };
+    const userData = { name: idNo, idNo, email: user.email, role: defaultRole, createdAt: new Date() };
     try { await setDoc(doc(db, 'users', user.uid), userData); } catch(e) {}
     sessionStorage.setItem(cacheKey, JSON.stringify(userData));
     return userData;
   } catch(e) {
-    const idNo = user.email.split('@')[0];
-    return { name: idNo, idNo, email: user.email, role: 'employee' };
+    return { name: idNo, idNo, email: user.email, role: defaultRole };
   }
 }
 
