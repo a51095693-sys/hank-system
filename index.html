@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 登入</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif;background:#F8FAFC;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.wrap{width:100%;max-width:360px}
+.brand{text-align:center;margin-bottom:28px}
+.brand-icon{width:60px;height:60px;background:linear-gradient(135deg,#F97316,#EA6C0A);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 12px;box-shadow:0 8px 24px rgba(249,115,22,.3)}
+.brand h1{font-size:22px;font-weight:700;color:#0F172A}
+.brand p{font-size:12px;color:#94A3B8;margin-top:4px}
+.card{background:#fff;border-radius:18px;padding:28px;border:1px solid #E2E8F0;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.fr{margin-bottom:16px}
+.fr label{display:block;font-size:11px;color:#64748B;font-weight:600;margin-bottom:6px;letter-spacing:.6px}
+.fr input{width:100%;padding:11px 14px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:14px;font-family:inherit;color:#0F172A;background:#F8FAFC;transition:.15s}
+.fr input:focus{outline:none;border-color:#F97316;background:#fff;box-shadow:0 0 0 3px rgba(249,115,22,.1)}
+.btn-login{width:100%;background:linear-gradient(135deg,#F97316,#EA6C0A);color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;margin-top:4px}
+.btn-login:hover{box-shadow:0 6px 20px rgba(249,115,22,.35)}
+.btn-login:disabled{opacity:.5;cursor:not-allowed}
+.err{font-size:12px;color:#DC2626;margin-top:10px;text-align:center;min-height:16px;font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="brand-icon">📢</div>
+    <h1>客訴反饋系統</h1>
+    <p>內部客訴管理平台</p>
+  </div>
+  <div class="card">
+    <div class="fr">
+      <label>帳號</label>
+      <input id="idNo" type="text" placeholder="輸入帳號" autocomplete="off">
+    </div>
+    <div class="fr">
+      <label>密碼</label>
+      <input id="pwd" type="password" placeholder="••••••">
+    </div>
+    <div class="err" id="errMsg"></div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">登入</button>
+  </div>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+onAuthStateChanged(auth, async u => {
+  if (!u) return;
+  const ud = await getUserData(db, u);
+  window.location.href = ud.role === 'admin' ? 'admin.html' : 'submit.html';
+});
+
+document.getElementById('idNo').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('pwd').focus(); });
+document.getElementById('pwd').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+window.doLogin = async () => {
+  const id = document.getElementById('idNo').value.trim();
+  const pwd = document.getElementById('pwd').value;
+  const err = document.getElementById('errMsg');
+  const btn = document.getElementById('loginBtn');
+  if (!id || !pwd) { err.textContent = '請填寫帳號與密碼'; return; }
+  err.textContent = ''; btn.disabled = true; btn.textContent = '登入中…';
+  try {
+    await signInWithEmailAndPassword(auth, id + '@complaint.local', pwd);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '登入';
+    err.textContent = '帳號或密碼錯誤';
+  }
+};
+</script>
+</body>
+</html>

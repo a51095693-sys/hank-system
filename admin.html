@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 管理端</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">📋 客訴管理</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📢 客訴反饋系統</h2><p>管理端</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title">📋 所有客訴</div>
+
+    <div class="card">
+      <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:12px;">
+        <select class="form-control" id="filterStatus" style="width:auto;" onchange="loadData()">
+          <option value="">全部狀態</option>
+          <option value="待處理">待處理</option>
+          <option value="處理中">處理中</option>
+          <option value="已結案">已結案</option>
+        </select>
+        <select class="form-control" id="filterType" style="width:auto;" onchange="loadData()">
+          <option value="">全部類型</option>
+          <option value="品質問題">品質問題</option>
+          <option value="配送問題">配送問題</option>
+          <option value="數量問題">數量問題</option>
+          <option value="其他">其他</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadData()">🔄 重新整理</button>
+        <span id="countBadge" style="font-size:12px;color:var(--text3);"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>提交者</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>聯絡</th><th>狀態</th><th>回覆</th><th></th></tr></thead>
+          <tbody id="dataTable"><tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 回覆 Modal -->
+<div class="modal-bg" id="replyModal">
+  <div class="modal">
+    <div class="modal-title">📝 審核回覆</div>
+    <div id="modalInfo" style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.8;"></div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">處理狀態</label>
+      <select class="form-control" id="mStatus">
+        <option value="待處理">待處理</option>
+        <option value="處理中">處理中</option>
+        <option value="已結案">已結案</option>
+      </select>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label class="form-label">廚房回覆 <span style="color:var(--primary);font-size:10px;">（提交者可見）</span></label>
+      <textarea class="form-control" id="mReply" placeholder="輸入回覆內容…" style="min-height:100px;"></textarea>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" onclick="saveReply()">💾 儲存回覆</button>
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+    </div>
+    <input type="hidden" id="mId">
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, query, where, getDocs, updateDoc, doc, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+let _ud, _records = {};
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  _ud = await getUserData(db, user);
+  if (_ud.role !== 'admin') { window.location.href = 'submit.html'; return; }
+  renderSidebar(_ud, 'admin.html');
+  loadData();
+});
+
+window.loadData = async () => {
+  const tbody = document.getElementById('dataTable');
+  tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
+  const fs = document.getElementById('filterStatus').value;
+  const ft = document.getElementById('filterType').value;
+  try {
+    let q;
+    if (fs && ft) q = query(collection(db,'complaints'), where('status','==',fs), where('type','==',ft), orderBy('createdAt','desc'));
+    else if (fs) q = query(collection(db,'complaints'), where('status','==',fs), orderBy('createdAt','desc'));
+    else if (ft) q = query(collection(db,'complaints'), where('type','==',ft), orderBy('createdAt','desc'));
+    else q = query(collection(db,'complaints'), orderBy('createdAt','desc'));
+    const snap = await getDocs(q);
+    document.getElementById('countBadge').textContent = `共 ${snap.size} 筆`;
+    if (snap.empty) { tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>'; return; }
+    _records = {};
+    tbody.innerHTML = snap.docs.map(d => {
+      const e = d.data(); _records[d.id] = e;
+      const rowStyle = e.status==='待處理' ? 'background:#FFF5F5;' : '';
+      return `<tr style="${rowStyle}">
+        <td>${e.date}</td>
+        <td><span class="badge badge-blue">${e.submittedBy||'-'}</span></td>
+        <td><strong>${e.store}</strong></td>
+        <td>${e.type}</td>
+        <td>${e.item||'-'}</td>
+        <td style="max-width:160px;white-space:normal;">${e.desc}</td>
+        <td style="font-size:12px;color:var(--text2);">${e.contact||'-'}</td>
+        <td><span class="badge badge-${e.status}">${e.status}</span></td>
+        <td>${e.reply ? `<span style="color:var(--success);font-size:12px;">💬 已回覆</span>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
+        <td><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button></td>
+      </tr>`;
+    }).join('');
+  } catch(e) { tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>'; }
+};
+
+window.openModal = (id) => {
+  const e = _records[id]; if (!e) return;
+  document.getElementById('mId').value = id;
+  document.getElementById('mStatus').value = e.status;
+  document.getElementById('mReply').value = e.reply || '';
+  document.getElementById('modalInfo').innerHTML = `
+    <div><strong>日期：</strong>${e.date}　<strong>提交者：</strong>${e.submittedBy||'-'}</div>
+    <div><strong>門市／客戶：</strong>${e.store}　<strong>類型：</strong>${e.type}</div>
+    ${e.item?`<div><strong>品項：</strong>${e.item}</div>`:''}
+    <div style="margin-top:6px;"><strong>描述：</strong>${e.desc}</div>
+    ${e.contact?`<div><strong>聯絡：</strong>${e.contact}</div>`:''}
+  `;
+  document.getElementById('replyModal').classList.add('open');
+};
+
+window.closeModal = () => document.getElementById('replyModal').classList.remove('open');
+
+window.saveReply = async () => {
+  const id = document.getElementById('mId').value;
+  const status = document.getElementById('mStatus').value;
+  const reply = document.getElementById('mReply').value.trim();
+  try {
+    await updateDoc(doc(db,'complaints',id), {
+      status, reply,
+      repliedBy: reply ? _ud.name : '',
+      repliedAt: reply ? serverTimestamp() : null
+    });
+    showToast('已儲存', 'success');
+    closeModal();
+    loadData();
+  } catch(e) { showToast('儲存失敗', 'error'); }
+};
+
+document.getElementById('replyModal').addEventListener('click', e => { if(e.target===document.getElementById('replyModal')) closeModal(); });
+</script>
+</body>
+</html>
