@@ -57,7 +57,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, addDoc, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, todayStr, renderSidebar } from "./app.js";
 
@@ -108,11 +108,15 @@ async function loadMyComplaints() {
   try {
     const snap = await getDocs(query(
       collection(db, 'complaints'),
-      where('submittedUid', '==', auth.currentUser.uid),
-      orderBy('createdAt', 'desc')
+      where('submittedUid', '==', auth.currentUser.uid)
     ));
     if (snap.empty) { tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>'; return; }
-    tbody.innerHTML = snap.docs.map(d => {
+    const sorted = snap.docs.slice().sort((a,b) => {
+      const ta = a.data().createdAt?.seconds || 0;
+      const tb = b.data().createdAt?.seconds || 0;
+      return tb - ta;
+    });
+    tbody.innerHTML = sorted.map(d => {
       const e = d.data();
       const replyHtml = e.reply
         ? `<div class="reply-box"><h4>💬 廚房回覆</h4><p>${e.reply}</p>${e.repliedBy?`<div class="meta">回覆者：${e.repliedBy}</div>`:''}</div>`
