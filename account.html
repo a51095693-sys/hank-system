@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 帳號管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">👥 帳號管理</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📢 客訴反饋系統</h2><p>管理端</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title">👥 帳號管理</div>
+
+    <div class="card">
+      <div class="flex justify-between items-center" style="margin-bottom:16px;">
+        <span style="font-size:13px;color:var(--text2);">管理員工登入帳號</span>
+        <button class="btn btn-primary btn-sm" onclick="openAdd()">＋ 新增帳號</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>建立時間</th><th></th></tr></thead>
+          <tbody id="acTable"><tr><td colspan="5" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 新增帳號 Modal -->
+<div class="modal-bg" id="addModal">
+  <div class="modal">
+    <div class="modal-title">＋ 新增員工帳號</div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">帳號（登入用）*</label>
+      <input type="text" class="form-control" id="aIdNo" placeholder="例如：emp001">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">姓名 *</label>
+      <input type="text" class="form-control" id="aName" placeholder="員工姓名">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">密碼 *</label>
+      <input type="password" class="form-control" id="aPwd" placeholder="至少 6 個字元">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label class="form-label">角色</label>
+      <select class="form-control" id="aRole">
+        <option value="employee">員工</option>
+        <option value="admin">管理員</option>
+      </select>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">登入帳號格式：<strong id="emailPreview">帳號@complaint.local</strong></div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="addBtn" onclick="createAccount()">建立帳號</button>
+      <button class="btn btn-outline" onclick="closeAdd()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 確認刪除 Modal -->
+<div class="modal-bg" id="delModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-title" style="color:var(--danger);">⚠️ 確認刪除</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px;">確定要刪除帳號 <strong id="delName"></strong> 嗎？此操作無法復原。</p>
+    <div class="flex gap-2">
+      <button class="btn btn-danger w-full" id="delConfirmBtn" onclick="confirmDelete()">確認刪除</button>
+      <button class="btn btn-outline" onclick="closeDel()">取消</button>
+    </div>
+    <input type="hidden" id="delId">
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signOut as fbSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const secondApp = initializeApp(firebaseConfig, 'secondary');
+const secondAuth = getAuth(secondApp);
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  const ud = getUserData(db, user);
+  if (ud.role !== 'admin') { window.location.href = 'submit.html'; return; }
+  renderSidebar(ud, 'account.html');
+  loadAccounts();
+});
+
+async function loadAccounts() {
+  const tbody = document.getElementById('acTable');
+  try {
+    const snap = await getDocs(collection(db, 'accounts'));
+    if (snap.empty) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">尚無帳號記錄<br><span style="font-size:11px;">點擊「新增帳號」建立員工帳號</span></td></tr>';
+      return;
+    }
+    const sorted = snap.docs.slice().sort((a, b) =>
+      (a.data().createdAt?.seconds || 0) - (b.data().createdAt?.seconds || 0)
+    );
+    tbody.innerHTML = sorted.map(d => {
+      const e = d.data();
+      const roleLabel = e.role === 'admin' ? '<span class="badge badge-blue">管理員</span>' : '<span class="badge" style="background:#F1F5F9;color:var(--text2);">員工</span>';
+      const createdAt = e.createdAt?.toDate ? e.createdAt.toDate().toLocaleDateString('zh-TW') : '-';
+      return `<tr>
+        <td><code style="background:var(--surface2);padding:2px 8px;border-radius:6px;font-size:12px;">${e.idNo}</code></td>
+        <td><strong>${e.name}</strong></td>
+        <td>${roleLabel}</td>
+        <td style="font-size:12px;color:var(--text3);">${createdAt}</td>
+        <td><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDel('${d.id}','${e.name}')">刪除</button></td>
+      </tr>`;
+    }).join('');
+  } catch(err) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+  }
+}
+
+window.openAdd = () => {
+  ['aIdNo','aName','aPwd'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('aRole').value = 'employee';
+  document.getElementById('emailPreview').textContent = '帳號@complaint.local';
+  document.getElementById('addModal').classList.add('open');
+};
+window.closeAdd = () => document.getElementById('addModal').classList.remove('open');
+
+document.getElementById('aIdNo').addEventListener('input', () => {
+  const v = document.getElementById('aIdNo').value.trim();
+  document.getElementById('emailPreview').textContent = (v || '帳號') + '@complaint.local';
+});
+
+window.createAccount = async () => {
+  const idNo = document.getElementById('aIdNo').value.trim();
+  const name = document.getElementById('aName').value.trim();
+  const pwd = document.getElementById('aPwd').value;
+  const role = document.getElementById('aRole').value;
+  if (!idNo || !name || !pwd) { showToast('請填寫所有欄位', 'error'); return; }
+  if (pwd.length < 6) { showToast('密碼至少 6 個字元', 'error'); return; }
+  const btn = document.getElementById('addBtn');
+  btn.disabled = true; btn.textContent = '建立中…';
+  try {
+    const email = `${idNo}@complaint.local`;
+    const cred = await createUserWithEmailAndPassword(secondAuth, email, pwd);
+    await fbSignOut(secondAuth);
+    await setDoc(doc(db, 'accounts', cred.user.uid), {
+      uid: cred.user.uid, idNo, name, role, email,
+      createdAt: serverTimestamp()
+    });
+    showToast(`帳號 ${idNo} 建立成功`, 'success');
+    closeAdd();
+    loadAccounts();
+  } catch(err) {
+    if (err.code === 'auth/email-already-in-use') {
+      showToast('此帳號已存在', 'error');
+    } else {
+      showToast('建立失敗：' + err.message, 'error');
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = '建立帳號';
+  }
+};
+
+window.openDel = (id, name) => {
+  document.getElementById('delId').value = id;
+  document.getElementById('delName').textContent = name;
+  document.getElementById('delModal').classList.add('open');
+};
+window.closeDel = () => document.getElementById('delModal').classList.remove('open');
+
+window.confirmDelete = async () => {
+  const id = document.getElementById('delId').value;
+  const btn = document.getElementById('delConfirmBtn');
+  btn.disabled = true;
+  try {
+    await deleteDoc(doc(db, 'accounts', id));
+    showToast('帳號已刪除', 'success');
+    closeDel();
+    loadAccounts();
+  } catch(err) {
+    showToast('刪除失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('addModal').addEventListener('click', e => { if(e.target===document.getElementById('addModal')) closeAdd(); });
+document.getElementById('delModal').addEventListener('click', e => { if(e.target===document.getElementById('delModal')) closeDel(); });
+</script>
+</body>
+</html>
