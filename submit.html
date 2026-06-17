@@ -80,7 +80,7 @@ onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
   _ud = getUserData(db, user);
   if (_ud.role === 'admin') { window.location.href = 'admin.html'; return; }
-  renderSidebar(_ud, 'submit.html');
+  renderSidebar(_ud, 'submit.html', auth);
 });
 
 const ALLOWED_TYPES = ['image/jpeg','image/png','image/webp','image/gif'];

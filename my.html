@@ -101,7 +101,7 @@ onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
   _ud = getUserData(db, user);
   if (_ud.role === 'admin') { window.location.href = 'admin.html'; return; }
-  renderSidebar(_ud, 'my.html');
+  renderSidebar(_ud, 'my.html', auth);
   loadData();
 });
 
@@ -116,9 +116,11 @@ function renderThread(e) {
   if (!msgs.length) return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:8px;">尚無對話訊息</div>';
   return msgs.map(m => {
     const isAdmin = m.from === 'admin';
+    const timeStr = m.at ? new Date(m.at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
     return `<div style="align-self:${isAdmin?'flex-start':'flex-end'};max-width:85%;background:${isAdmin?'#EFF6FF':'#fff'};border:1px solid ${isAdmin?'#BFDBFE':'var(--border)'};border-radius:10px;padding:8px 12px;">
       <div style="font-size:11px;font-weight:700;color:${isAdmin?'#3B82F6':'var(--text2)'};margin-bottom:2px;">${m.name || (isAdmin?'管理員':'我')}</div>
       <div style="font-size:13px;color:var(--text1);">${m.text}</div>
+      ${timeStr?`<div style="font-size:10px;color:var(--text3);margin-top:3px;text-align:right;">${timeStr}</div>`:''}
     </div>`;
   }).join('');
 }

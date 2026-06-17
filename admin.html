@@ -54,6 +54,10 @@
           <option value="數量問題">數量問題</option>
           <option value="其他">其他</option>
         </select>
+        <input type="date" class="form-control" id="filterDateFrom" style="width:auto;" onchange="loadData()" title="起始日期">
+        <span style="color:var(--text3);">～</span>
+        <input type="date" class="form-control" id="filterDateTo" style="width:auto;" onchange="loadData()" title="結束日期">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('filterDateFrom').value='';document.getElementById('filterDateTo').value='';loadData()">✕ 清除日期</button>
         <button class="btn btn-outline btn-sm" onclick="loadData()">🔄 重新整理</button>
         <button class="btn btn-primary btn-sm" onclick="openAddModal()">✚ 新增客訴</button>
         <span id="countBadge" style="font-size:12px;color:var(--text3);"></span>
@@ -172,7 +176,7 @@ onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
   _ud = getUserData(db, user);
   if (_ud.role !== 'admin') { window.location.href = 'submit.html'; return; }
-  renderSidebar(_ud, 'admin.html');
+  renderSidebar(_ud, 'admin.html', auth);
   loadData();
 });
 
@@ -204,10 +208,14 @@ window.loadData = async () => {
     // 篩選
     const fs = document.getElementById('filterStatus').value;
     const ft = document.getElementById('filterType').value;
+    const fdFrom = document.getElementById('filterDateFrom').value;
+    const fdTo = document.getElementById('filterDateTo').value;
     const filtered = sorted.filter(d => {
       const e = d.data();
       if (fs && e.status !== fs) return false;
       if (ft && e.type !== ft) return false;
+      if (fdFrom && e.date < fdFrom) return false;
+      if (fdTo && e.date > fdTo) return false;
       return true;
     });
 
@@ -254,9 +262,11 @@ function renderThread(e) {
   if (!msgs.length) return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:8px;">尚無對話訊息</div>';
   return msgs.map(m => {
     const isAdmin = m.from === 'admin';
+    const timeStr = m.at ? new Date(m.at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
     return `<div style="align-self:${isAdmin?'flex-end':'flex-start'};max-width:85%;background:${isAdmin?'#EFF6FF':'#fff'};border:1px solid ${isAdmin?'#BFDBFE':'var(--border)'};border-radius:10px;padding:8px 12px;">
       <div style="font-size:11px;font-weight:700;color:${isAdmin?'#3B82F6':'var(--text2)'};margin-bottom:2px;">${m.name || (isAdmin?'管理員':'員工')}</div>
       <div style="font-size:13px;color:var(--text1);">${m.text}</div>
+      ${timeStr?`<div style="font-size:10px;color:var(--text3);margin-top:3px;text-align:right;">${timeStr}</div>`:''}
     </div>`;
   }).join('');
 }
