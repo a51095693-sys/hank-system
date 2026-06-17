@@ -222,7 +222,7 @@ window.openModal = (id) => {
     ${e.item?`<div><strong>品項：</strong>${e.item}</div>`:''}
     <div style="margin-top:6px;"><strong>描述：</strong>${e.desc}</div>
     ${e.contact?`<div><strong>聯絡：</strong>${e.contact}</div>`:''}
-    ${e.mediaUrl?`<div style="margin-top:8px;">${e.mediaType==='video'?`<video src="${e.mediaUrl}" controls style="max-width:100%;max-height:240px;border-radius:8px;"></video>`:`<a href="${e.mediaUrl}" target="_blank"><img src="${e.mediaUrl}" style="max-width:100%;max-height:240px;border-radius:8px;"></a>`}</div>`:''}
+    ${e.mediaUrl?`<div style="margin-top:8px;"><a href="${e.mediaUrl}" target="_blank"><img src="${e.mediaUrl}" style="max-width:100%;max-height:240px;border-radius:8px;"></a></div>`:''}
     ${e.reply?`<div style="margin-top:8px;padding:10px;background:#EFF6FF;border-radius:8px;font-size:12px;color:#1E40AF;">💬 目前回覆：${e.reply}</div>`:''}
   `;
   document.getElementById('replyModal').classList.add('open');

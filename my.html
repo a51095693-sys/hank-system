@@ -110,9 +110,7 @@ window.loadData = async () => {
         ? `<div class="reply-box"><h4>💬 廚房回覆</h4><p>${e.reply}</p>${e.repliedBy?`<div class="meta">回覆者：${e.repliedBy}</div>`:''}</div>`
         : `<span class="text-muted" style="font-size:12px;">尚未回覆</span>`;
       const mediaHtml = e.mediaUrl
-        ? (e.mediaType==='video'
-            ? `<video src="${e.mediaUrl}" controls style="max-width:120px;max-height:90px;border-radius:6px;display:block;"></video>`
-            : `<a href="${e.mediaUrl}" target="_blank"><img src="${e.mediaUrl}" style="max-width:120px;max-height:90px;border-radius:6px;display:block;"></a>`)
+        ? `<a href="${e.mediaUrl}" target="_blank"><img src="${e.mediaUrl}" style="max-width:120px;max-height:90px;border-radius:6px;display:block;"></a>`
         : `<span class="text-muted" style="font-size:12px;">-</span>`;
       return `<tr data-search="${search}">
         <td style="white-space:nowrap;">${e.date}</td>
