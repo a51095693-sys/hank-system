@@ -23,7 +23,7 @@
     <div class="page-title">📋 所有客訴</div>
 
     <!-- 統計卡片 -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+    <div class="stat-grid">
       <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
         <div style="font-size:32px;font-weight:700;color:var(--danger);" id="statPending">-</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px;">待處理</div>
@@ -40,7 +40,7 @@
 
     <div class="card">
       <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:12px;">
-        <input type="text" class="form-control" id="searchInput" placeholder="🔍 搜尋門市、描述…" style="width:auto;min-width:160px;" oninput="filterTable()">
+        <input type="text" class="form-control mob-tool-search" id="searchInput" placeholder="🔍 搜尋門市、描述…" style="width:auto;min-width:160px;" oninput="filterTable()">
         <select class="form-control" id="filterStatus" style="width:auto;" onchange="loadData()">
           <option value="">全部狀態</option>
           <option value="待處理">待處理</option>
@@ -216,14 +216,14 @@ window.loadData = async () => {
         ? `<div style="font-size:12px;color:var(--success);line-height:1.5;">💬 ${lm.text}${lm.name ? `<div style="color:var(--text3);font-size:11px;margin-top:2px;">— ${lm.name}</div>` : ''}</div>`
         : `<span style="color:var(--text3);font-size:12px;">-</span>`;
       return `<tr data-search="${search}" style="${e.status==='待處理'?'background:#FFF5F5;':''}">
-        <td style="white-space:nowrap;">${e.date}</td>
-        <td><span class="badge badge-blue">${e.submittedBy||'-'}</span></td>
-        <td><strong>${e.store}</strong></td>
-        <td style="white-space:nowrap;">${e.type}</td>
-        <td>${e.item||'-'}</td>
-        <td style="max-width:160px;white-space:normal;">${e.desc}${e.mediaUrl?` <span title="含附件">📎</span>`:''}</td>
-        <td><span class="badge badge-${e.status}">${e.status}</span></td>
-        <td style="max-width:200px;">${replyHtml}</td>
+        <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
+        <td data-label="提交者"><span class="badge badge-blue">${e.submittedBy||'-'}</span></td>
+        <td data-label="門市／客戶"><strong>${e.store}</strong></td>
+        <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
+        <td data-label="品項">${e.item||'-'}</td>
+        <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.mediaUrl?` <span title="含附件">📎</span>`:''}</td>
+        <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span></td>
+        <td data-label="最新訊息" style="max-width:200px;">${replyHtml}</td>
         <td><div class="flex gap-2"><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDelComplaint('${d.id}','${e.store}')">刪除</button></div></td>
       </tr>`;
     }).join('');

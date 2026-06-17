@@ -23,7 +23,7 @@
     <div class="page-title">📋 我的客訴</div>
 
     <!-- 個人統計 -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+    <div class="stat-grid">
       <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
         <div style="font-size:32px;font-weight:700;color:var(--danger);" id="statPending">-</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px;">待處理</div>
@@ -161,14 +161,14 @@ window.loadData = async () => {
         ? `<img src="${e.mediaUrl}" style="max-width:120px;max-height:90px;border-radius:6px;display:block;cursor:zoom-in;" onclick="showImage(this.src)">`
         : `<span class="text-muted" style="font-size:12px;">-</span>`;
       return `<tr data-search="${search}">
-        <td style="white-space:nowrap;">${e.date}</td>
-        <td><strong>${e.store}</strong></td>
-        <td style="white-space:nowrap;">${e.type}</td>
-        <td>${e.item||'-'}</td>
-        <td style="max-width:180px;white-space:normal;">${e.desc}</td>
-        <td>${mediaHtml}</td>
-        <td><span class="badge badge-${e.status}">${e.status}</span></td>
-        <td style="max-width:200px;">${lastHtml}</td>
+        <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
+        <td data-label="門市／客戶"><strong>${e.store}</strong></td>
+        <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
+        <td data-label="品項">${e.item||'-'}</td>
+        <td data-label="描述" style="max-width:180px;white-space:normal;">${e.desc}</td>
+        <td data-label="附件">${mediaHtml}</td>
+        <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span></td>
+        <td data-label="最新訊息" style="max-width:200px;">${lastHtml}</td>
         <td><button class="btn btn-outline btn-sm" onclick="openThread('${d.id}')">💬 對話</button></td>
       </tr>`;
     }).join('');

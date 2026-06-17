@@ -78,6 +78,9 @@ tr:hover td{background:#FAFAFA}
 .reply-box p{font-size:13px;color:#1E40AF;line-height:1.6}
 .reply-box .meta{font-size:11px;color:#93C5FD;margin-top:6px}
 
+/* Stat 卡片 */
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+
 /* Utilities */
 .hidden{display:none!important}
 .text-muted{color:var(--text3)}
@@ -94,4 +97,31 @@ tr:hover td{background:#FAFAFA}
   .mob-overlay.show{display:block}
   .main{margin-left:0;padding:16px}
   .page-title{font-size:17px}
+
+  /* 統計卡片縮小 */
+  .stat-grid{gap:8px}
+  .stat-grid .card{padding:12px!important}
+  .stat-grid .card>div:first-child{font-size:24px!important}
+
+  /* 工具列：搜尋框獨立一行 */
+  .mob-tool-search{flex:1 1 100%!important;min-width:0!important}
+
+  /* 觸控按鈕加大 */
+  .btn-sm{padding:7px 12px;font-size:12.5px}
+
+  /* Modal 縮小邊距 */
+  .modal{padding:18px;border-radius:14px}
+  .modal-title{font-size:15px;margin-bottom:14px}
+  .modal [style*="grid-template-columns"]{grid-template-columns:1fr!important}
+
+  /* 表格卡片化 */
+  .table-wrap table,.table-wrap thead,.table-wrap tbody,.table-wrap tr{display:block}
+  .table-wrap thead{position:absolute;top:-9999px;left:-9999px}
+  .table-wrap tr[data-search],.table-wrap tbody>tr{border:1px solid var(--border);border-radius:10px;padding:4px 12px;margin-bottom:10px;background:#fff}
+  .table-wrap tr:hover td{background:none!important}
+  .table-wrap td{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border:none;border-top:1px solid var(--surface2);padding:8px 0;white-space:normal!important;max-width:none!important}
+  .table-wrap td:first-child{border-top:none}
+  .table-wrap td::before{content:attr(data-label);font-weight:700;font-size:11px;color:var(--text2);flex-shrink:0;min-width:64px}
+  .table-wrap td:not([data-label]){display:block;padding-top:10px}
+  .table-wrap td:not([data-label])::before{display:none}
 }
