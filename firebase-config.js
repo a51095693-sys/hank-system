@@ -1,8 +1,9 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyDYqbcnkJ7U_feYaMY6UzIYQhF4-gt4i8Y",
-  authDomain: "complaint-system-d14d8.firebaseapp.com",
-  projectId: "complaint-system-d14d8",
-  storageBucket: "complaint-system-d14d8.firebasestorage.app",
-  messagingSenderId: "139100398274",
-  appId: "1:139100398274:web:591e1d4b0bd7bf5956115b"
+  apiKey: "AIzaSyBkkTguFbN_QW53hK_7O6YX8nYOzmPQd98",
+  authDomain: "complaint-system-v2.firebaseapp.com",
+  projectId: "complaint-system-v2",
+  storageBucket: "complaint-system-v2.firebasestorage.app",
+  messagingSenderId: "915823132906",
+  appId: "1:915823132906:web:ade1ea8ce3914646c41793",
+  measurementId: "G-4GVD7PF91R"
 };
