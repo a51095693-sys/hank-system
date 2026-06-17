@@ -55,6 +55,7 @@
           <option value="其他">其他</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadData()">🔄 重新整理</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddModal()">✚ 新增客訴</button>
         <span id="countBadge" style="font-size:12px;color:var(--text3);"></span>
       </div>
       <div class="table-wrap">
@@ -67,6 +68,33 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- 新增客訴 Modal -->
+<div class="modal-bg" id="addModal">
+  <div class="modal">
+    <div class="modal-title">✚ 新增客訴</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:14px;">
+      <div><label class="form-label">日期 *</label><input type="date" class="form-control" id="nDate"></div>
+      <div><label class="form-label">門市／客戶 *</label><input type="text" class="form-control" id="nStore" placeholder="門市或客戶名稱"></div>
+      <div><label class="form-label">客訴類型 *</label>
+        <select class="form-control" id="nType">
+          <option value="品質問題">品質問題</option>
+          <option value="配送問題">配送問題</option>
+          <option value="數量問題">數量問題</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+      <div><label class="form-label">相關品項</label><input type="text" class="form-control" id="nItem" placeholder="選填"></div>
+      <div style="grid-column:1/-1;"><label class="form-label">提交者</label><input type="text" class="form-control" id="nSubmitter" placeholder="例如：門市名稱或代為登錄人員"></div>
+      <div style="grid-column:1/-1;"><label class="form-label">問題描述 *</label><textarea class="form-control" id="nDesc" placeholder="請詳細描述客訴內容…"></textarea></div>
+      <div style="grid-column:1/-1;"><label class="form-label">客戶聯絡方式</label><input type="text" class="form-control" id="nContact" placeholder="電話或 Email（選填）"></div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="addCBtn" onclick="createComplaint()">📨 送出客訴</button>
+      <button class="btn btn-outline" onclick="closeAddModal()">取消</button>
+    </div>
+  </div>
+</div>
 
 <!-- 回覆 Modal -->
 <div class="modal-bg" id="replyModal">
@@ -96,9 +124,9 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar } from "./app.js";
+import { getUserData, showToast, renderSidebar, todayStr } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -201,6 +229,43 @@ window.openModal = (id) => {
 
 window.closeModal = () => document.getElementById('replyModal').classList.remove('open');
 
+window.openAddModal = () => {
+  ['nStore','nItem','nSubmitter','nDesc','nContact'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('nType').value = '品質問題';
+  document.getElementById('nDate').value = todayStr();
+  document.getElementById('addModal').classList.add('open');
+};
+window.closeAddModal = () => document.getElementById('addModal').classList.remove('open');
+
+window.createComplaint = async () => {
+  const date = document.getElementById('nDate').value;
+  const store = document.getElementById('nStore').value.trim();
+  const desc = document.getElementById('nDesc').value.trim();
+  if (!date || !store || !desc) { showToast('請填寫必填欄位', 'error'); return; }
+  const btn = document.getElementById('addCBtn');
+  btn.disabled = true; btn.textContent = '送出中…';
+  try {
+    await addDoc(collection(db, 'complaints'), {
+      date, store,
+      type: document.getElementById('nType').value,
+      item: document.getElementById('nItem').value.trim(),
+      desc,
+      contact: document.getElementById('nContact').value.trim(),
+      status: '待處理', reply: '', repliedBy: '',
+      submittedBy: document.getElementById('nSubmitter').value.trim() || _ud.name,
+      submittedUid: auth.currentUser.uid,
+      createdAt: serverTimestamp()
+    });
+    showToast('客訴已新增', 'success');
+    closeAddModal();
+    loadData();
+  } catch(err) {
+    showToast('新增失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '📨 送出客訴';
+  }
+};
+
 window.saveReply = async () => {
   const id = document.getElementById('mId').value;
   const status = document.getElementById('mStatus').value;
@@ -218,6 +283,7 @@ window.saveReply = async () => {
 };
 
 document.getElementById('replyModal').addEventListener('click', e => { if(e.target===document.getElementById('replyModal')) closeModal(); });
+document.getElementById('addModal').addEventListener('click', e => { if(e.target===document.getElementById('addModal')) closeAddModal(); });
 </script>
 </body>
 </html>
