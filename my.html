@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -46,8 +46,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>狀態</th><th>廚房回覆</th></tr></thead>
-          <tbody id="myTable"><tr><td colspan="7" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th>日期</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>附件</th><th>狀態</th><th>廚房回覆</th></tr></thead>
+          <tbody id="myTable"><tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -79,7 +79,7 @@ onAuthStateChanged(auth, async user => {
 
 window.loadData = async () => {
   const tbody = document.getElementById('myTable');
-  tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
   try {
     const snap = await getDocs(query(
       collection(db, 'complaints'),
@@ -93,7 +93,7 @@ window.loadData = async () => {
     document.getElementById('statDone').textContent = counts['已結案'];
 
     if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>';
       document.getElementById('countBadge').textContent = '共 0 筆';
       return;
     }
@@ -109,18 +109,24 @@ window.loadData = async () => {
       const replyHtml = e.reply
         ? `<div class="reply-box"><h4>💬 廚房回覆</h4><p>${e.reply}</p>${e.repliedBy?`<div class="meta">回覆者：${e.repliedBy}</div>`:''}</div>`
         : `<span class="text-muted" style="font-size:12px;">尚未回覆</span>`;
+      const mediaHtml = e.mediaUrl
+        ? (e.mediaType==='video'
+            ? `<video src="${e.mediaUrl}" controls style="max-width:120px;max-height:90px;border-radius:6px;display:block;"></video>`
+            : `<a href="${e.mediaUrl}" target="_blank"><img src="${e.mediaUrl}" style="max-width:120px;max-height:90px;border-radius:6px;display:block;"></a>`)
+        : `<span class="text-muted" style="font-size:12px;">-</span>`;
       return `<tr data-search="${search}">
         <td style="white-space:nowrap;">${e.date}</td>
         <td><strong>${e.store}</strong></td>
         <td style="white-space:nowrap;">${e.type}</td>
         <td>${e.item||'-'}</td>
         <td style="max-width:180px;white-space:normal;">${e.desc}</td>
+        <td>${mediaHtml}</td>
         <td><span class="badge badge-${e.status}">${e.status}</span></td>
         <td style="max-width:220px;">${replyHtml}</td>
       </tr>`;
     }).join('');
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
 };
 
@@ -133,3 +139,4 @@ window.filterTable = () => {
 </script>
 </body>
 </html>
+

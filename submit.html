@@ -37,8 +37,13 @@
         <div><label class="form-label">相關品項</label><input type="text" class="form-control" id="fItem" placeholder="選填"></div>
         <div style="grid-column:1/-1;"><label class="form-label">問題描述 *</label><textarea class="form-control" id="fDesc" placeholder="請詳細描述客訴內容…"></textarea></div>
         <div style="grid-column:1/-1;"><label class="form-label">客戶聯絡方式</label><input type="text" class="form-control" id="fContact" placeholder="電話或 Email（選填）"></div>
+        <div style="grid-column:1/-1;">
+          <label class="form-label">附加照片／影片</label>
+          <input type="file" class="form-control" id="fMedia" accept="image/*,video/*" onchange="previewMedia()">
+          <div id="mediaPreview" style="margin-top:10px;"></div>
+        </div>
       </div>
-      <button class="btn btn-primary" onclick="submitComplaint()">📨 送出客訴</button>
+      <button class="btn btn-primary" id="submitBtn" onclick="submitComplaint()">📨 送出客訴</button>
     </div>
   </main>
 </div>
@@ -48,12 +53,14 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, todayStr, renderSidebar } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, 'default');
+const storage = getStorage(app);
 let _ud;
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
@@ -68,18 +75,40 @@ onAuthStateChanged(auth, async user => {
   renderSidebar(_ud, 'submit.html');
 });
 
+window.previewMedia = () => {
+  const file = document.getElementById('fMedia').files[0];
+  const box = document.getElementById('mediaPreview');
+  if (!file) { box.innerHTML = ''; return; }
+  const url = URL.createObjectURL(file);
+  box.innerHTML = file.type.startsWith('video')
+    ? `<video src="${url}" controls style="max-width:100%;max-height:200px;border-radius:8px;"></video>`
+    : `<img src="${url}" style="max-width:100%;max-height:200px;border-radius:8px;">`;
+};
+
 window.submitComplaint = async () => {
   const date = document.getElementById('fDate').value;
   const store = document.getElementById('fStore').value.trim();
   const desc = document.getElementById('fDesc').value.trim();
   if (!date || !store || !desc) { showToast('請填寫必填欄位', 'error'); return; }
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '送出中…';
   try {
+    let mediaUrl = '', mediaType = '';
+    const file = document.getElementById('fMedia').files[0];
+    if (file) {
+      btn.textContent = '上傳檔案中…';
+      const sRef = ref(storage, `complaints/${Date.now()}_${file.name}`);
+      await uploadBytes(sRef, file);
+      mediaUrl = await getDownloadURL(sRef);
+      mediaType = file.type.startsWith('video') ? 'video' : 'image';
+    }
     await addDoc(collection(db, 'complaints'), {
       date, store,
       type: document.getElementById('fType').value,
       item: document.getElementById('fItem').value.trim(),
       desc,
       contact: document.getElementById('fContact').value.trim(),
+      mediaUrl, mediaType,
       status: '待處理', reply: '', repliedBy: '',
       submittedBy: _ud.name, submittedUid: auth.currentUser.uid,
       createdAt: serverTimestamp()
@@ -88,7 +117,10 @@ window.submitComplaint = async () => {
     ['fStore','fItem','fDesc','fContact'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('fType').value = '品質問題';
     document.getElementById('fDate').value = todayStr();
+    document.getElementById('fMedia').value = '';
+    document.getElementById('mediaPreview').innerHTML = '';
   } catch(err) { showToast('送出失敗，請重試', 'error'); }
+  finally { btn.disabled = false; btn.textContent = '📨 送出客訴'; }
 };
 </script>
 </body>
