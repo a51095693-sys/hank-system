@@ -36,7 +36,6 @@
         </div>
         <div><label class="form-label">相關品項</label><input type="text" class="form-control" id="fItem" placeholder="選填"></div>
         <div style="grid-column:1/-1;"><label class="form-label">問題描述 *</label><textarea class="form-control" id="fDesc" placeholder="請詳細描述客訴內容…"></textarea></div>
-        <div style="grid-column:1/-1;"><label class="form-label">客戶聯絡方式</label><input type="text" class="form-control" id="fContact" placeholder="電話或 Email（選填）"></div>
         <div style="grid-column:1/-1;">
           <label class="form-label">附加照片</label>
           <input type="file" class="form-control" id="fMedia" accept="image/jpeg,image/png,image/webp,image/gif" onchange="previewMedia()">
@@ -142,14 +141,13 @@ window.submitComplaint = async () => {
       type: document.getElementById('fType').value,
       item: document.getElementById('fItem').value.trim(),
       desc,
-      contact: document.getElementById('fContact').value.trim(),
       mediaUrl,
-      status: '待處理', reply: '', repliedBy: '',
+      status: '待處理', messages: [],
       submittedBy: _ud.name, submittedUid: auth.currentUser.uid,
       createdAt: serverTimestamp()
     });
     showToast('客訴已送出', 'success');
-    ['fStore','fItem','fDesc','fContact'].forEach(id => document.getElementById(id).value = '');
+    ['fStore','fItem','fDesc'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('fType').value = '品質問題';
     document.getElementById('fDate').value = todayStr();
     document.getElementById('fMedia').value = '';

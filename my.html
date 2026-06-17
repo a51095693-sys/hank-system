@@ -46,8 +46,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>附件</th><th>狀態</th><th>廚房回覆</th></tr></thead>
-          <tbody id="myTable"><tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th>日期</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>附件</th><th>狀態</th><th>最新訊息</th><th></th></tr></thead>
+          <tbody id="myTable"><tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -55,31 +55,71 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<!-- 對話 Modal -->
+<div class="modal-bg" id="threadModal">
+  <div class="modal">
+    <div class="modal-title">💬 客訴對話</div>
+    <div id="threadInfo" style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.8;"></div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">對話紀錄</label>
+      <div id="threadBox" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;background:var(--surface2);border-radius:10px;padding:10px;"></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label class="form-label">新增訊息</label>
+      <textarea class="form-control" id="tMsg" placeholder="輸入訊息內容…" style="min-height:80px;"></textarea>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="tSendBtn" onclick="sendMessage()">📨 送出訊息</button>
+      <button class="btn btn-outline" onclick="closeThread()">關閉</button>
+    </div>
+    <input type="hidden" id="tId">
+  </div>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, 'default');
+let _ud, _records = {};
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
-  const ud = getUserData(db, user);
-  if (ud.role === 'admin') { window.location.href = 'admin.html'; return; }
-  renderSidebar(ud, 'my.html');
+  _ud = getUserData(db, user);
+  if (_ud.role === 'admin') { window.location.href = 'admin.html'; return; }
+  renderSidebar(_ud, 'my.html');
   loadData();
 });
 
+function lastMessage(e) {
+  if (e.messages && e.messages.length) return e.messages[e.messages.length - 1];
+  if (e.reply) return { from: 'admin', name: e.repliedBy || '管理員', text: e.reply };
+  return null;
+}
+
+function renderThread(e) {
+  const msgs = e.messages && e.messages.length ? e.messages : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
+  if (!msgs.length) return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:8px;">尚無對話訊息</div>';
+  return msgs.map(m => {
+    const isAdmin = m.from === 'admin';
+    return `<div style="align-self:${isAdmin?'flex-start':'flex-end'};max-width:85%;background:${isAdmin?'#EFF6FF':'#fff'};border:1px solid ${isAdmin?'#BFDBFE':'var(--border)'};border-radius:10px;padding:8px 12px;">
+      <div style="font-size:11px;font-weight:700;color:${isAdmin?'#3B82F6':'var(--text2)'};margin-bottom:2px;">${m.name || (isAdmin?'管理員':'我')}</div>
+      <div style="font-size:13px;color:var(--text1);">${m.text}</div>
+    </div>`;
+  }).join('');
+}
+
 window.loadData = async () => {
   const tbody = document.getElementById('myTable');
-  tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
   try {
     const snap = await getDocs(query(
       collection(db, 'complaints'),
@@ -93,7 +133,7 @@ window.loadData = async () => {
     document.getElementById('statDone').textContent = counts['已結案'];
 
     if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>';
       document.getElementById('countBadge').textContent = '共 0 筆';
       return;
     }
@@ -105,10 +145,12 @@ window.loadData = async () => {
     document.getElementById('countBadge').textContent = `共 ${sorted.length} 筆`;
     tbody.innerHTML = sorted.map(d => {
       const e = d.data();
+      _records[d.id] = e;
       const search = [e.store, e.desc, e.item].join(' ').toLowerCase();
-      const replyHtml = e.reply
-        ? `<div class="reply-box"><h4>💬 廚房回覆</h4><p>${e.reply}</p>${e.repliedBy?`<div class="meta">回覆者：${e.repliedBy}</div>`:''}</div>`
-        : `<span class="text-muted" style="font-size:12px;">尚未回覆</span>`;
+      const last = lastMessage(e);
+      const lastHtml = last
+        ? `<div style="font-size:12px;"><strong>${last.from==='admin'?'廚房':'我'}：</strong>${last.text}</div>`
+        : `<span class="text-muted" style="font-size:12px;">尚無對話</span>`;
       const mediaHtml = e.mediaUrl
         ? `<a href="${e.mediaUrl}" target="_blank"><img src="${e.mediaUrl}" style="max-width:120px;max-height:90px;border-radius:6px;display:block;"></a>`
         : `<span class="text-muted" style="font-size:12px;">-</span>`;
@@ -120,13 +162,53 @@ window.loadData = async () => {
         <td style="max-width:180px;white-space:normal;">${e.desc}</td>
         <td>${mediaHtml}</td>
         <td><span class="badge badge-${e.status}">${e.status}</span></td>
-        <td style="max-width:220px;">${replyHtml}</td>
+        <td style="max-width:200px;">${lastHtml}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="openThread('${d.id}')">💬 對話</button></td>
       </tr>`;
     }).join('');
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
 };
+
+window.openThread = (id) => {
+  const e = _records[id];
+  if (!e) return;
+  document.getElementById('tId').value = id;
+  document.getElementById('threadInfo').innerHTML = `
+    <div><strong>日期：</strong>${e.date}　<strong>門市：</strong>${e.store}</div>
+    <div><strong>類型：</strong>${e.type}　<strong>狀態：</strong><span class="badge badge-${e.status}">${e.status}</span></div>
+    <div><strong>描述：</strong>${e.desc}</div>
+  `;
+  document.getElementById('threadBox').innerHTML = renderThread(e);
+  document.getElementById('tMsg').value = '';
+  document.getElementById('threadModal').classList.add('open');
+};
+
+window.closeThread = () => document.getElementById('threadModal').classList.remove('open');
+
+window.sendMessage = async () => {
+  const id = document.getElementById('tId').value;
+  const text = document.getElementById('tMsg').value.trim();
+  if (!text) { showToast('請輸入訊息內容', 'error'); return; }
+  const btn = document.getElementById('tSendBtn');
+  btn.disabled = true;
+  try {
+    const e = _records[id];
+    const msgs = e.messages && e.messages.length ? e.messages.slice() : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
+    msgs.push({ from: 'employee', name: _ud.name, text, at: Date.now() });
+    await updateDoc(doc(db, 'complaints', id), { messages: msgs });
+    showToast('訊息已送出', 'success');
+    closeThread();
+    loadData();
+  } catch(err) {
+    showToast('送出失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('threadModal').addEventListener('click', e => { if(e.target===document.getElementById('threadModal')) closeThread(); });
 
 window.filterTable = () => {
   const kw = document.getElementById('searchInput').value.toLowerCase();

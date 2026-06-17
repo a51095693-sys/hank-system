@@ -60,8 +60,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>提交者</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>聯絡</th><th>狀態</th><th>廚房回覆</th><th></th></tr></thead>
-          <tbody id="dataTable"><tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th>日期</th><th>提交者</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>狀態</th><th>最新訊息</th><th></th></tr></thead>
+          <tbody id="dataTable"><tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -87,7 +87,6 @@
       <div><label class="form-label">相關品項</label><input type="text" class="form-control" id="nItem" placeholder="選填"></div>
       <div style="grid-column:1/-1;"><label class="form-label">提交者</label><input type="text" class="form-control" id="nSubmitter" placeholder="例如：門市名稱或代為登錄人員"></div>
       <div style="grid-column:1/-1;"><label class="form-label">問題描述 *</label><textarea class="form-control" id="nDesc" placeholder="請詳細描述客訴內容…"></textarea></div>
-      <div style="grid-column:1/-1;"><label class="form-label">客戶聯絡方式</label><input type="text" class="form-control" id="nContact" placeholder="電話或 Email（選填）"></div>
     </div>
     <div class="flex gap-2">
       <button class="btn btn-primary w-full" id="addCBtn" onclick="createComplaint()">📨 送出客訴</button>
@@ -96,10 +95,10 @@
   </div>
 </div>
 
-<!-- 回覆 Modal -->
+<!-- 審核回覆 Modal -->
 <div class="modal-bg" id="replyModal">
   <div class="modal">
-    <div class="modal-title">📝 審核回覆</div>
+    <div class="modal-title">📝 客訴詳情與回覆</div>
     <div id="modalInfo" style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.8;"></div>
     <div style="margin-bottom:12px;">
       <label class="form-label">處理狀態</label>
@@ -109,12 +108,16 @@
         <option value="已結案">已結案</option>
       </select>
     </div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">對話紀錄</label>
+      <div id="threadBox" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;background:var(--surface2);border-radius:10px;padding:10px;"></div>
+    </div>
     <div style="margin-bottom:16px;">
-      <label class="form-label">廚房回覆 <span style="color:var(--primary);font-size:10px;">（提交者可見）</span></label>
-      <textarea class="form-control" id="mReply" placeholder="輸入回覆內容…" style="min-height:100px;"></textarea>
+      <label class="form-label">新增回覆 <span style="color:var(--primary);font-size:10px;">（提交者可見）</span></label>
+      <textarea class="form-control" id="mReply" placeholder="輸入回覆內容…" style="min-height:80px;"></textarea>
     </div>
     <div class="flex gap-2">
-      <button class="btn btn-primary w-full" onclick="saveReply()">💾 儲存回覆</button>
+      <button class="btn btn-primary w-full" onclick="saveReply()">💾 儲存</button>
       <button class="btn btn-outline" onclick="closeModal()">取消</button>
     </div>
     <input type="hidden" id="mId">
@@ -144,9 +147,15 @@ onAuthStateChanged(auth, async user => {
   loadData();
 });
 
+function lastMessage(e) {
+  if (e.messages && e.messages.length) return e.messages[e.messages.length - 1];
+  if (e.reply) return { from: 'admin', name: e.repliedBy || '管理員', text: e.reply };
+  return null;
+}
+
 window.loadData = async () => {
   const tbody = document.getElementById('dataTable');
-  tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
   try {
     const snap = await getDocs(collection(db, 'complaints'));
     const allDocs = snap.docs;
@@ -176,15 +185,16 @@ window.loadData = async () => {
     _records = {};
     document.getElementById('countBadge').textContent = `共 ${filtered.length} 筆`;
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>';
       return;
     }
 
     tbody.innerHTML = filtered.map(d => {
       const e = d.data(); _records[d.id] = e;
-      const search = [e.store, e.desc, e.submittedBy, e.item, e.contact].join(' ').toLowerCase();
-      const replyHtml = e.reply
-        ? `<div style="font-size:12px;color:var(--success);line-height:1.5;">💬 ${e.reply}${e.repliedBy ? `<div style="color:var(--text3);font-size:11px;margin-top:2px;">— ${e.repliedBy}</div>` : ''}</div>`
+      const search = [e.store, e.desc, e.submittedBy, e.item].join(' ').toLowerCase();
+      const lm = lastMessage(e);
+      const replyHtml = lm
+        ? `<div style="font-size:12px;color:var(--success);line-height:1.5;">💬 ${lm.text}${lm.name ? `<div style="color:var(--text3);font-size:11px;margin-top:2px;">— ${lm.name}</div>` : ''}</div>`
         : `<span style="color:var(--text3);font-size:12px;">-</span>`;
       return `<tr data-search="${search}" style="${e.status==='待處理'?'background:#FFF5F5;':''}">
         <td style="white-space:nowrap;">${e.date}</td>
@@ -193,14 +203,13 @@ window.loadData = async () => {
         <td style="white-space:nowrap;">${e.type}</td>
         <td>${e.item||'-'}</td>
         <td style="max-width:160px;white-space:normal;">${e.desc}${e.mediaUrl?` <span title="含附件">📎</span>`:''}</td>
-        <td style="font-size:12px;color:var(--text2);">${e.contact||'-'}</td>
         <td><span class="badge badge-${e.status}">${e.status}</span></td>
         <td style="max-width:200px;">${replyHtml}</td>
         <td><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button></td>
       </tr>`;
     }).join('');
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
 };
 
@@ -211,19 +220,30 @@ window.filterTable = () => {
   });
 };
 
+function renderThread(e) {
+  const msgs = e.messages && e.messages.length ? e.messages : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
+  if (!msgs.length) return '<div style="color:var(--text3);font-size:12px;text-align:center;padding:8px;">尚無對話訊息</div>';
+  return msgs.map(m => {
+    const isAdmin = m.from === 'admin';
+    return `<div style="align-self:${isAdmin?'flex-end':'flex-start'};max-width:85%;background:${isAdmin?'#EFF6FF':'#fff'};border:1px solid ${isAdmin?'#BFDBFE':'var(--border)'};border-radius:10px;padding:8px 12px;">
+      <div style="font-size:11px;font-weight:700;color:${isAdmin?'#3B82F6':'var(--text2)'};margin-bottom:2px;">${m.name || (isAdmin?'管理員':'員工')}</div>
+      <div style="font-size:13px;color:var(--text1);">${m.text}</div>
+    </div>`;
+  }).join('');
+}
+
 window.openModal = (id) => {
   const e = _records[id]; if (!e) return;
   document.getElementById('mId').value = id;
   document.getElementById('mStatus').value = e.status;
-  document.getElementById('mReply').value = e.reply || '';
+  document.getElementById('mReply').value = '';
+  document.getElementById('threadBox').innerHTML = renderThread(e);
   document.getElementById('modalInfo').innerHTML = `
     <div><strong>日期：</strong>${e.date}　<strong>提交者：</strong>${e.submittedBy||'-'}</div>
     <div><strong>門市／客戶：</strong>${e.store}　<strong>類型：</strong>${e.type}</div>
     ${e.item?`<div><strong>品項：</strong>${e.item}</div>`:''}
     <div style="margin-top:6px;"><strong>描述：</strong>${e.desc}</div>
-    ${e.contact?`<div><strong>聯絡：</strong>${e.contact}</div>`:''}
     ${e.mediaUrl?`<div style="margin-top:8px;"><a href="${e.mediaUrl}" target="_blank"><img src="${e.mediaUrl}" style="max-width:100%;max-height:240px;border-radius:8px;"></a></div>`:''}
-    ${e.reply?`<div style="margin-top:8px;padding:10px;background:#EFF6FF;border-radius:8px;font-size:12px;color:#1E40AF;">💬 目前回覆：${e.reply}</div>`:''}
   `;
   document.getElementById('replyModal').classList.add('open');
 };
@@ -231,7 +251,7 @@ window.openModal = (id) => {
 window.closeModal = () => document.getElementById('replyModal').classList.remove('open');
 
 window.openAddModal = () => {
-  ['nStore','nItem','nSubmitter','nDesc','nContact'].forEach(id => document.getElementById(id).value = '');
+  ['nStore','nItem','nSubmitter','nDesc'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('nType').value = '品質問題';
   document.getElementById('nDate').value = todayStr();
   document.getElementById('addModal').classList.add('open');
@@ -251,8 +271,7 @@ window.createComplaint = async () => {
       type: document.getElementById('nType').value,
       item: document.getElementById('nItem').value.trim(),
       desc,
-      contact: document.getElementById('nContact').value.trim(),
-      status: '待處理', reply: '', repliedBy: '',
+      status: '待處理', messages: [],
       submittedBy: document.getElementById('nSubmitter').value.trim() || _ud.name,
       submittedUid: auth.currentUser.uid,
       createdAt: serverTimestamp()
@@ -270,13 +289,16 @@ window.createComplaint = async () => {
 window.saveReply = async () => {
   const id = document.getElementById('mId').value;
   const status = document.getElementById('mStatus').value;
-  const reply = document.getElementById('mReply').value.trim();
+  const text = document.getElementById('mReply').value.trim();
   try {
-    await updateDoc(doc(db, 'complaints', id), {
-      status, reply,
-      repliedBy: reply ? _ud.name : '',
-      repliedAt: reply ? serverTimestamp() : null
-    });
+    const e = _records[id];
+    const updates = { status };
+    if (text) {
+      const msgs = e.messages && e.messages.length ? e.messages.slice() : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
+      msgs.push({ from: 'admin', name: _ud.name, text, at: Date.now() });
+      updates.messages = msgs;
+    }
+    await updateDoc(doc(db, 'complaints', id), updates);
     showToast('已儲存', 'success');
     closeModal();
     loadData();
