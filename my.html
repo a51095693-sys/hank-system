@@ -46,8 +46,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>附件</th><th>狀態</th><th>最新訊息</th><th></th></tr></thead>
-          <tbody id="myTable"><tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th>日期</th><th>時間</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>附件</th><th>狀態</th><th>最新訊息</th><th></th></tr></thead>
+          <tbody id="myTable"><tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -139,7 +139,7 @@ window.loadData = async () => {
     document.getElementById('statDone').textContent = counts['已結案'];
 
     if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>';
       document.getElementById('countBadge').textContent = '共 0 筆';
       return;
     }
@@ -160,8 +160,10 @@ window.loadData = async () => {
       const mediaHtml = e.mediaUrl
         ? `<img src="${e.mediaUrl}" style="max-width:120px;max-height:90px;border-radius:6px;display:block;cursor:zoom-in;" onclick="showImage(this.src)">`
         : `<span class="text-muted" style="font-size:12px;">-</span>`;
+      const time = e.createdAt?.toDate ? e.createdAt.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '-';
       return `<tr data-search="${search}">
         <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
+        <td data-label="時間" style="white-space:nowrap;">${time}</td>
         <td data-label="門市／客戶"><strong>${e.store}</strong></td>
         <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
         <td data-label="品項">${e.item||'-'}</td>
@@ -173,7 +175,7 @@ window.loadData = async () => {
       </tr>`;
     }).join('');
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
 };
 
