@@ -43,7 +43,7 @@ export function renderSidebar(ud, activePage, auth, db) {
     nav.innerHTML = pages.map(([href, ic, label]) =>
       `<a href="${href}" class="nav-item${href===activePage?' active':''}"><span class="ic">${ic}</span>${label}</a>`
     ).join('');
-    nav.innerHTML += `<button class="nav-item" onclick="openTitleModal()"><span class="ic">✏️</span>設定稱謂</button>`;
+    if (isAdmin) nav.innerHTML += `<button class="nav-item" onclick="openTitleModal()"><span class="ic">✏️</span>設定稱謂</button>`;
     nav.innerHTML += `<button class="nav-item" onclick="openPwdModal()"><span class="ic">🔒</span>修改密碼</button>`;
     nav.innerHTML += `<button class="nav-item" onclick="doSignOut()"><span class="ic">🚪</span>登出</button>`;
   }
@@ -54,7 +54,7 @@ export function renderSidebar(ud, activePage, auth, db) {
   }
 
   if (auth) initPasswordChange(auth);
-  if (db) initTitleChange(db, ud);
+  if (db && isAdmin) initTitleChange(db, ud);
 }
 
 function initTitleChange(db, ud) {
