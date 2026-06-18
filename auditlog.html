@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 操作紀錄</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">📜 操作紀錄</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📢 客訴反饋系統</h2><p>管理端</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title">📜 操作紀錄</div>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">記錄誰在何時新增、更新或刪除了客訴，方便日後查證。</p>
+
+    <div class="card">
+      <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:12px;">
+        <input type="text" class="form-control mob-tool-search" id="searchInput" placeholder="🔍 搜尋門市、操作人、內容…" style="width:auto;min-width:160px;" oninput="filterTable()">
+        <select class="form-control" id="filterAction" style="width:auto;" onchange="filterTable()">
+          <option value="">全部動作</option>
+          <option value="新增客訴">新增客訴</option>
+          <option value="更新客訴">更新客訴</option>
+          <option value="逾期原因說明">逾期原因說明</option>
+          <option value="刪除客訴">刪除客訴</option>
+        </select>
+        <input type="date" class="form-control" id="filterDateFrom" style="width:auto;" onchange="loadData()" title="起始日期">
+        <span style="color:var(--text3);">～</span>
+        <input type="date" class="form-control" id="filterDateTo" style="width:auto;" onchange="loadData()" title="結束日期">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('filterDateFrom').value='';document.getElementById('filterDateTo').value='';loadData()">✕ 清除日期</button>
+        <button class="btn btn-outline btn-sm" onclick="loadData()">🔄 重新整理</button>
+        <span id="countBadge" style="font-size:12px;color:var(--text3);"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>時間</th><th>操作人</th><th>角色</th><th>動作</th><th>門市／客戶</th><th>詳細內容</th></tr></thead>
+          <tbody id="dataTable"><tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+let _allDocs = [];
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  const ud = await getUserData(db, user);
+  if (ud.role !== 'admin') { window.location.href = ud.role === 'manager' ? 'admin.html' : 'submit.html'; return; }
+  renderSidebar(ud, 'auditlog.html', auth);
+  loadData();
+});
+
+const actionColors = {
+  '新增客訴': '#3B82F6',
+  '更新客訴': '#D97706',
+  '逾期原因說明': '#B45309',
+  '刪除客訴': '#DC2626'
+};
+
+window.loadData = async () => {
+  const tbody = document.getElementById('dataTable');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
+  try {
+    const snap = await getDocs(collection(db, 'auditLog'));
+    const fdFrom = document.getElementById('filterDateFrom').value;
+    const fdTo = document.getElementById('filterDateTo').value;
+    let docs = snap.docs.filter(d => {
+      const e = d.data();
+      if (!e.at?.seconds) return false;
+      if (fdFrom || fdTo) {
+        const dateStr = new Date(e.at.seconds * 1000).toISOString().slice(0, 10);
+        if (fdFrom && dateStr < fdFrom) return false;
+        if (fdTo && dateStr > fdTo) return false;
+      }
+      return true;
+    });
+    docs.sort((a, b) => (b.data().at?.seconds || 0) - (a.data().at?.seconds || 0));
+    _allDocs = docs.map(d => d.data());
+    renderTable();
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+  }
+};
+
+function renderTable() {
+  const tbody = document.getElementById('dataTable');
+  document.getElementById('countBadge').textContent = `共 ${_allDocs.length} 筆`;
+  if (_allDocs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _allDocs.map(e => {
+    const search = [e.store, e.actor, e.detail, e.action].join(' ').toLowerCase();
+    const timeStr = e.at?.seconds ? new Date(e.at.seconds * 1000).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+    const color = actionColors[e.action] || 'var(--text2)';
+    return `<tr data-search="${search}" data-action="${e.action}">
+      <td data-label="時間" style="white-space:nowrap;">${timeStr}</td>
+      <td data-label="操作人">${e.actor || '-'}</td>
+      <td data-label="角色">${e.actorRole || '-'}</td>
+      <td data-label="動作"><span class="badge" style="background:${color}1A;color:${color};">${e.action}</span></td>
+      <td data-label="門市／客戶">${e.store || '-'}</td>
+      <td data-label="詳細內容" style="max-width:280px;white-space:normal;">${e.detail || '-'}</td>
+    </tr>`;
+  }).join('');
+  filterTable();
+}
+
+window.filterTable = () => {
+  const kw = document.getElementById('searchInput').value.toLowerCase();
+  const fa = document.getElementById('filterAction').value;
+  document.querySelectorAll('#dataTable tr[data-search]').forEach(tr => {
+    const matchKw = tr.dataset.search.includes(kw);
+    const matchAction = !fa || tr.dataset.action === fa;
+    tr.style.display = (matchKw && matchAction) ? '' : 'none';
+  });
+};
+</script>
+</body>
+</html>

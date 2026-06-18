@@ -1,9 +1,19 @@
 import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 export function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+export async function logAudit(db, ud, action, complaintId, store, detail) {
+  try {
+    await addDoc(collection(db, 'auditLog'), {
+      action, complaintId, store: store || '', detail: detail || '',
+      actor: ud.name, actorRole: ud.role === 'admin' ? '管理員' : (ud.jobTitle || '員工'),
+      at: serverTimestamp()
+    });
+  } catch (e) {}
 }
 
 export function showToast(msg, type = '') {
@@ -43,7 +53,7 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['account.html','👥','帳號管理']]
+    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['auditlog.html','📜','操作紀錄'],['account.html','👥','帳號管理']]
     : isManager
     ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案']]
     : [['submit.html','📝','提交客訴'],['my.html','📋','我的客訴']];

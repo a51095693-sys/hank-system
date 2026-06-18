@@ -171,7 +171,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr } from "./app.js";
+import { getUserData, showToast, renderSidebar, todayStr, logAudit } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -373,6 +373,7 @@ window.saveOverdueReason = async (id) => {
     });
     _records[id].overdueReason = text;
     _records[id].overdueReasonBy = _ud.name;
+    logAudit(db, _ud, '逾期原因說明', id, _records[id].store, text);
     showToast('已送出逾期原因', 'success');
     openModal(id);
     loadData();
@@ -390,10 +391,13 @@ window.closeDelComplaint = () => document.getElementById('delComplaintModal').cl
 
 window.confirmDeleteComplaint = async () => {
   const id = document.getElementById('delComplaintId').value;
+  const store = document.getElementById('delComplaintStore').textContent;
   const btn = document.getElementById('delComplaintConfirmBtn');
   btn.disabled = true;
   try {
+    const e = _records[id];
     await deleteDoc(doc(db, 'complaints', id));
+    logAudit(db, _ud, '刪除客訴', id, store, e ? `日期:${e.date} 狀態:${e.status} 描述:${(e.desc||'').slice(0,50)}` : '');
     showToast('客訴已刪除', 'success');
     closeDelComplaint();
     loadData();
@@ -420,7 +424,7 @@ window.createComplaint = async () => {
   const btn = document.getElementById('addCBtn');
   btn.disabled = true; btn.textContent = '送出中…';
   try {
-    await addDoc(collection(db, 'complaints'), {
+    const ref = await addDoc(collection(db, 'complaints'), {
       date, store,
       type: document.getElementById('nType').value,
       item: document.getElementById('nItem').value.trim(),
@@ -430,6 +434,7 @@ window.createComplaint = async () => {
       submittedUid: auth.currentUser.uid,
       createdAt: serverTimestamp()
     });
+    logAudit(db, _ud, '新增客訴', ref.id, store, desc.slice(0, 50) + (desc.length > 50 ? '…' : ''));
     showToast('客訴已新增', 'success');
     closeAddModal();
     loadData();
@@ -454,6 +459,10 @@ window.saveReply = async () => {
       updates.messages = msgs;
     }
     await updateDoc(doc(db, 'complaints', id), updates);
+    const logParts = [];
+    if (status !== e.status) logParts.push(`狀態：${e.status} → ${status}`);
+    if (text) logParts.push(`新增回覆：${text.slice(0, 50)}${text.length > 50 ? '…' : ''}`);
+    if (logParts.length) logAudit(db, _ud, '更新客訴', id, e.store, logParts.join('；'));
     showToast('已儲存', 'success');
     closeModal();
     loadData();
