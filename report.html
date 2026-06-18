@@ -89,6 +89,10 @@
           尚無可統計的結案時效資料<br>（此功能從現在開始累積，舊的已結案客訴需重新確認狀態後才會被計入）
         </div>
       </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;">依品項統計客訴</div>
+        <div style="height:260px;"><canvas id="chartItem"></canvas></div>
+      </div>
     </div>
   </main>
 </div>
@@ -194,6 +198,10 @@ function renderReport() {
     docs.forEach(e => { const s = e.store || '未填寫'; storeMap[s] = (storeMap[s] || 0) + 1; });
     const storeSorted = Object.entries(storeMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
+    const itemMap = {};
+    docs.forEach(e => { const i = e.item || '未填寫'; itemMap[i] = (itemMap[i] || 0) + 1; });
+    const itemSorted = Object.entries(itemMap).sort((a, b) => b[1] - a[1]);
+
     const monthMap = {};
     docs.forEach(e => { if (!e.date) return; const m = e.date.slice(0, 7); monthMap[m] = (monthMap[m] || 0) + 1; });
     const months = Object.keys(monthMap).sort();
@@ -212,6 +220,7 @@ function renderReport() {
     renderCharts({
       types, typeCounts,
       storeLabels: storeSorted.map(x => x[0]), storeCounts: storeSorted.map(x => x[1]),
+      itemLabels: itemSorted.map(x => x[0]), itemCounts: itemSorted.map(x => x[1]),
       months, monthCounts: months.map(m => monthMap[m]),
       closeMonths, closeAvgs
     });
@@ -220,6 +229,7 @@ function renderReport() {
       total, doneRate: total ? doneRate : null, avgDays, overdueRate: activeDocs.length ? overdueRate : null,
       types, typeCounts,
       storeRows: storeSorted,
+      itemRows: itemSorted,
       monthRows: months.map(m => [m, monthMap[m]])
     };
   } catch (err) {
@@ -245,6 +255,10 @@ window.exportCSV = () => {
   lines.push('門市／客戶排行（Top 10）');
   lines.push('門市／客戶,數量');
   d.storeRows.forEach(([s, c]) => lines.push(`${s},${c}`));
+  lines.push('');
+  lines.push('依品項統計客訴');
+  lines.push('品項,數量');
+  d.itemRows.forEach(([i, c]) => lines.push(`${i},${c}`));
   lines.push('');
   lines.push('每月客訴趨勢');
   lines.push('月份,數量');
@@ -273,6 +287,16 @@ function renderCharts(d) {
   _charts.push(new Chart(document.getElementById('chartStore'), {
     type: 'bar',
     data: { labels: d.storeLabels, datasets: [{ label: '客訴數', data: d.storeCounts, backgroundColor: '#F97316' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { precision: 0 } } }
+    }
+  }));
+
+  _charts.push(new Chart(document.getElementById('chartItem'), {
+    type: 'bar',
+    data: { labels: d.itemLabels, datasets: [{ label: '客訴數', data: d.itemCounts, backgroundColor: '#A855F7' }] },
     options: {
       responsive: true, maintainAspectRatio: false, indexAxis: 'y',
       plugins: { legend: { display: false } },
