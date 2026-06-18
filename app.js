@@ -43,7 +43,9 @@ export function renderSidebar(ud, activePage, auth) {
     nav.innerHTML = pages.map(([href, ic, label]) =>
       `<a href="${href}" class="nav-item${href===activePage?' active':''}"><span class="ic">${ic}</span>${label}</a>`
     ).join('');
-    nav.innerHTML += `<button class="nav-item" onclick="openPwdModal()"><span class="ic">🔒</span>修改密碼</button>`;
+    if (isAdmin) {
+      nav.innerHTML += `<button class="nav-item" onclick="openPwdModal()"><span class="ic">🔒</span>修改密碼</button>`;
+    }
     nav.innerHTML += `<button class="nav-item" onclick="doSignOut()"><span class="ic">🚪</span>登出</button>`;
   }
 
@@ -52,7 +54,7 @@ export function renderSidebar(ud, activePage, auth) {
     userArea.innerHTML = `<div class="uname">${ud.name}</div><div class="urole">${isAdmin?'管理員':'員工'}</div>`;
   }
 
-  if (auth) initPasswordChange(auth);
+  if (auth && isAdmin) initPasswordChange(auth);
 }
 
 function initPasswordChange(auth) {
