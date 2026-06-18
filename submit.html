@@ -31,8 +31,8 @@
     <div class="card">
       <div id="submitFormGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:14px;">
         <div style="min-width:0;"><label class="form-label">日期 *</label><input type="date" class="form-control" id="fDate"></div>
-        <div><label class="form-label">門市／客戶 *</label>
-          <select class="form-control" id="fStore"></select>
+        <div><label class="form-label">門市／客戶</label>
+          <input type="text" class="form-control" id="fStore" disabled style="background:var(--surface2);color:var(--text2);">
         </div>
         <div><label class="form-label">客訴類型 *</label>
           <select class="form-control" id="fType">
@@ -72,7 +72,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, setDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, todayStr, renderSidebar, STORES } from "./app.js";
+import { getUserData, showToast, todayStr, renderSidebar } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -83,13 +83,12 @@ window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle(
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
 
 document.getElementById('fDate').value = todayStr();
-document.getElementById('fStore').innerHTML = STORES.map(s => `<option value="${s}">${s}</option>`).join('');
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
   _ud = await getUserData(db, user);
   if (_ud.role === 'admin' || _ud.role === 'manager') { window.location.href = 'admin.html'; return; }
-  if (_ud.store) document.getElementById('fStore').value = _ud.store;
+  document.getElementById('fStore').value = _ud.store || '尚未設定門市，請聯絡管理員';
   renderSidebar(_ud, 'submit.html', auth);
 });
 
@@ -143,9 +142,10 @@ window.previewMedia = () => {
 
 window.submitComplaint = async () => {
   const date = document.getElementById('fDate').value;
-  const store = document.getElementById('fStore').value.trim();
+  const store = _ud.store;
   const desc = document.getElementById('fDesc').value.trim();
-  if (!date || !store || !desc) { showToast('請填寫必填欄位', 'error'); return; }
+  if (!store) { showToast('您的帳號尚未設定門市，請聯絡管理員', 'error'); return; }
+  if (!date || !desc) { showToast('請填寫必填欄位', 'error'); return; }
   const file = document.getElementById('fMedia').files[0];
   if (file && !ALLOWED_TYPES.includes(file.type)) { showToast('只支援 JPG、PNG、WEBP、GIF 圖片格式', 'error'); return; }
   const btn = document.getElementById('submitBtn');
@@ -172,7 +172,6 @@ window.submitComplaint = async () => {
     showToast('客訴已送出', 'success');
     ['fItem','fDesc'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('fType').value = '品質問題';
-    if (_ud.store) document.getElementById('fStore').value = _ud.store;
     document.getElementById('fDate').value = todayStr();
     document.getElementById('fMedia').value = '';
     document.getElementById('mediaPreview').innerHTML = '';
