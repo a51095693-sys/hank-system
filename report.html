@@ -93,6 +93,10 @@
         <div style="font-size:14px;font-weight:700;margin-bottom:10px;">依品項統計客訴</div>
         <div style="height:260px;"><canvas id="chartItem"></canvas></div>
       </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;">依標籤統計客訴</div>
+        <div style="height:260px;"><canvas id="chartTag"></canvas></div>
+      </div>
     </div>
   </main>
 </div>
@@ -103,12 +107,17 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr } from "./app.js";
+import { getUserData, showToast, renderSidebar, todayStr, loadTags } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, 'default');
-let _ud;
+let _ud, _tags = [];
+
+function tagColor(name) {
+  const t = _tags.find(t => t.name === name);
+  return t ? t.color : '#64748B';
+}
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
@@ -118,6 +127,7 @@ onAuthStateChanged(auth, async user => {
   _ud = await getUserData(db, user);
   if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
   renderSidebar(_ud, 'report.html', auth);
+  _tags = await loadTags(db);
   loadReport();
 });
 
@@ -202,6 +212,10 @@ function renderReport() {
     docs.forEach(e => { const i = e.item || '未填寫'; itemMap[i] = (itemMap[i] || 0) + 1; });
     const itemSorted = Object.entries(itemMap).sort((a, b) => b[1] - a[1]);
 
+    const tagMap = {};
+    docs.forEach(e => { const t = e.tag || '未分類'; tagMap[t] = (tagMap[t] || 0) + 1; });
+    const tagSorted = Object.entries(tagMap).sort((a, b) => b[1] - a[1]);
+
     const monthMap = {};
     docs.forEach(e => { if (!e.date) return; const m = e.date.slice(0, 7); monthMap[m] = (monthMap[m] || 0) + 1; });
     const months = Object.keys(monthMap).sort();
@@ -221,12 +235,14 @@ function renderReport() {
       types, typeCounts,
       storeLabels: storeSorted.map(x => x[0]), storeCounts: storeSorted.map(x => x[1]),
       itemLabels: itemSorted.map(x => x[0]), itemCounts: itemSorted.map(x => x[1]),
+      tagLabels: tagSorted.map(x => x[0]), tagCounts: tagSorted.map(x => x[1]),
       months, monthCounts: months.map(m => monthMap[m]),
       closeMonths, closeAvgs
     });
 
     _lastReportData = {
       total, doneRate: total ? doneRate : null, avgDays, overdueRate: activeDocs.length ? overdueRate : null,
+      tagRows: tagSorted,
       types, typeCounts,
       storeRows: storeSorted,
       itemRows: itemSorted,
@@ -259,6 +275,10 @@ window.exportCSV = () => {
   lines.push('依品項統計客訴');
   lines.push('品項,數量');
   d.itemRows.forEach(([i, c]) => lines.push(`${i},${c}`));
+  lines.push('');
+  lines.push('依標籤統計客訴');
+  lines.push('標籤,數量');
+  d.tagRows.forEach(([t, c]) => lines.push(`${t},${c}`));
   lines.push('');
   lines.push('每月客訴趨勢');
   lines.push('月份,數量');
@@ -297,6 +317,16 @@ function renderCharts(d) {
   _charts.push(new Chart(document.getElementById('chartItem'), {
     type: 'bar',
     data: { labels: d.itemLabels, datasets: [{ label: '客訴數', data: d.itemCounts, backgroundColor: '#A855F7' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { precision: 0 } } }
+    }
+  }));
+
+  _charts.push(new Chart(document.getElementById('chartTag'), {
+    type: 'bar',
+    data: { labels: d.tagLabels, datasets: [{ label: '客訴數', data: d.tagCounts, backgroundColor: d.tagLabels.map(t => tagColor(t)) }] },
     options: {
       responsive: true, maintainAspectRatio: false, indexAxis: 'y',
       plugins: { legend: { display: false } },

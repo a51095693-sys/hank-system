@@ -1,7 +1,16 @@
 import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { doc, getDoc, collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福'];
+
+export async function loadTags(db) {
+  try {
+    const snap = await getDocs(collection(db, 'tags'));
+    return snap.docs
+      .map(d => ({ id: d.id, name: d.data().name, color: d.data().color || '#64748B' }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  } catch (e) { return []; }
+}
 
 export function todayStr() {
   const d = new Date();
@@ -56,7 +65,7 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['auditlog.html','📜','操作紀錄'],['account.html','👥','帳號管理']]
+    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['auditlog.html','📜','操作紀錄'],['tags.html','🏷️','標籤管理'],['account.html','👥','帳號管理']]
     : isManager
     ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['auditlog.html','📜','操作紀錄']]
     : [['submit.html','📝','提交客訴'],['my.html','📋','我的客訴']];

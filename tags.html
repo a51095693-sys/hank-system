@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 標籤管理</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">🏷️ 標籤管理</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📢 客訴反饋系統</h2><p>管理端</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title">🏷️ 標籤管理</div>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">自訂客訴標籤，提交客訴時可額外選用，方便分類與統計問題根源。</p>
+
+    <div class="card">
+      <div class="flex justify-between items-center" style="margin-bottom:16px;">
+        <span style="font-size:13px;color:var(--text2);">目前標籤清單</span>
+        <button class="btn btn-primary btn-sm" onclick="openAdd()">＋ 新增標籤</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>顏色</th><th>標籤名稱</th><th>建立時間</th><th></th><th></th></tr></thead>
+          <tbody id="tagTable"><tr><td colspan="5" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 新增標籤 Modal -->
+<div class="modal-bg" id="addModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-title">＋ 新增標籤</div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">標籤名稱 *</label>
+      <input type="text" class="form-control" id="aName" placeholder="例如：包材問題">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label class="form-label">顏色</label>
+      <input type="color" class="form-control" id="aColor" value="#3B82F6" style="height:40px;cursor:pointer;">
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="addBtn" onclick="createTag()">建立標籤</button>
+      <button class="btn btn-outline" onclick="closeAdd()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 編輯標籤 Modal -->
+<div class="modal-bg" id="editModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-title">✏️ 編輯標籤</div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">標籤名稱 *</label>
+      <input type="text" class="form-control" id="eName" placeholder="標籤名稱">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label class="form-label">顏色</label>
+      <input type="color" class="form-control" id="eColor" style="height:40px;cursor:pointer;">
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="editBtn" onclick="saveEdit()">儲存</button>
+      <button class="btn btn-outline" onclick="closeEdit()">取消</button>
+    </div>
+    <input type="hidden" id="eId">
+  </div>
+</div>
+
+<!-- 確認刪除 Modal -->
+<div class="modal-bg" id="delModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-title" style="color:var(--danger);">⚠️ 確認刪除</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px;">確定要刪除標籤 <strong id="delName"></strong> 嗎？已套用此標籤的客訴不會被刪除，但標籤顯示會變回未分類。</p>
+    <div class="flex gap-2">
+      <button class="btn btn-danger w-full" id="delConfirmBtn" onclick="confirmDelete()">確認刪除</button>
+      <button class="btn btn-outline" onclick="closeDel()">取消</button>
+    </div>
+    <input type="hidden" id="delId">
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  const ud = await getUserData(db, user);
+  if (ud.role !== 'admin') { window.location.href = 'submit.html'; return; }
+  renderSidebar(ud, 'tags.html', auth);
+  loadTagsList();
+});
+
+let _tags = {};
+
+async function loadTagsList() {
+  const tbody = document.getElementById('tagTable');
+  try {
+    const snap = await getDocs(collection(db, 'tags'));
+    if (snap.empty) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">尚無標籤<br><span style="font-size:11px;">點擊「新增標籤」建立第一個標籤</span></td></tr>';
+      return;
+    }
+    const sorted = snap.docs.slice().sort((a, b) => (a.data().name||'').localeCompare(b.data().name||'', 'zh-Hant'));
+    _tags = {};
+    tbody.innerHTML = sorted.map(d => {
+      const e = d.data();
+      _tags[d.id] = e;
+      const color = e.color || '#64748B';
+      const createdAt = e.createdAt?.toDate ? e.createdAt.toDate().toLocaleDateString('zh-TW') : '-';
+      return `<tr>
+        <td data-label="顏色"><span style="display:inline-block;width:20px;height:20px;border-radius:6px;background:${color};border:1px solid var(--border);"></span></td>
+        <td data-label="標籤名稱"><span class="badge" style="background:${color}1A;color:${color};">${e.name}</span></td>
+        <td data-label="建立時間" style="font-size:12px;color:var(--text3);">${createdAt}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="openEdit('${d.id}')">編輯</button></td>
+        <td><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDel('${d.id}','${e.name}')">刪除</button></td>
+      </tr>`;
+    }).join('');
+  } catch(err) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+  }
+}
+
+window.openAdd = () => {
+  document.getElementById('aName').value = '';
+  document.getElementById('aColor').value = '#3B82F6';
+  document.getElementById('addModal').classList.add('open');
+};
+window.closeAdd = () => document.getElementById('addModal').classList.remove('open');
+
+window.createTag = async () => {
+  const name = document.getElementById('aName').value.trim();
+  const color = document.getElementById('aColor').value;
+  if (!name) { showToast('請輸入標籤名稱', 'error'); return; }
+  const existing = Object.values(_tags).some(t => t.name === name);
+  if (existing) { showToast('已有相同名稱的標籤', 'error'); return; }
+  const btn = document.getElementById('addBtn');
+  btn.disabled = true; btn.textContent = '建立中…';
+  try {
+    await addDoc(collection(db, 'tags'), { name, color, createdAt: serverTimestamp() });
+    showToast(`標籤「${name}」建立成功`, 'success');
+    closeAdd();
+    loadTagsList();
+  } catch(err) {
+    showToast('建立失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '建立標籤';
+  }
+};
+
+window.openEdit = (id) => {
+  const e = _tags[id];
+  if (!e) return;
+  document.getElementById('eId').value = id;
+  document.getElementById('eName').value = e.name;
+  document.getElementById('eColor').value = e.color || '#64748B';
+  document.getElementById('editModal').classList.add('open');
+};
+window.closeEdit = () => document.getElementById('editModal').classList.remove('open');
+
+window.saveEdit = async () => {
+  const id = document.getElementById('eId').value;
+  const name = document.getElementById('eName').value.trim();
+  const color = document.getElementById('eColor').value;
+  if (!name) { showToast('請輸入標籤名稱', 'error'); return; }
+  const existing = Object.entries(_tags).some(([tid, t]) => tid !== id && t.name === name);
+  if (existing) { showToast('已有相同名稱的標籤', 'error'); return; }
+  const btn = document.getElementById('editBtn');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  try {
+    await updateDoc(doc(db, 'tags', id), { name, color });
+    showToast('標籤已更新', 'success');
+    closeEdit();
+    loadTagsList();
+  } catch(err) {
+    showToast('更新失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '儲存';
+  }
+};
+
+window.openDel = (id, name) => {
+  document.getElementById('delId').value = id;
+  document.getElementById('delName').textContent = name;
+  document.getElementById('delModal').classList.add('open');
+};
+window.closeDel = () => document.getElementById('delModal').classList.remove('open');
+
+window.confirmDelete = async () => {
+  const id = document.getElementById('delId').value;
+  const btn = document.getElementById('delConfirmBtn');
+  btn.disabled = true;
+  try {
+    await deleteDoc(doc(db, 'tags', id));
+    showToast('標籤已刪除', 'success');
+    closeDel();
+    loadTagsList();
+  } catch(err) {
+    showToast('刪除失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('addModal').addEventListener('click', e => { if(e.target===document.getElementById('addModal')) closeAdd(); });
+document.getElementById('editModal').addEventListener('click', e => { if(e.target===document.getElementById('editModal')) closeEdit(); });
+document.getElementById('delModal').addEventListener('click', e => { if(e.target===document.getElementById('delModal')) closeDel(); });
+</script>
+</body>
+</html>
