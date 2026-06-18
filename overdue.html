@@ -125,7 +125,10 @@ window.loadData = async () => {
   tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
   try {
     const snap = await getDocs(collection(db, 'complaints'));
-    const overdueDocs = snap.docs.filter(d => isOverdue(d.data()));
+    const scopedDocs = (_isManager && _ud.store && _ud.store !== '總公司')
+      ? snap.docs.filter(d => d.data().store === _ud.store)
+      : snap.docs;
+    const overdueDocs = scopedDocs.filter(d => isOverdue(d.data()));
 
     const sorted = overdueDocs.slice().sort((a, b) =>
       (a.data().createdAt?.seconds || 0) - (b.data().createdAt?.seconds || 0)

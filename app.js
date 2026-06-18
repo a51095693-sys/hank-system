@@ -1,6 +1,8 @@
 import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福'];
+
 export function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -32,18 +34,19 @@ export async function getUserData(db, user) {
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch(e) {} }
   const idNo = user.email.split('@')[0];
-  let name = idNo, jobTitle = '';
+  let name = idNo, jobTitle = '', store = '';
   try {
     const snap = await getDoc(doc(db, 'accounts', user.uid));
     if (snap.exists()) {
       if (snap.data().name) name = snap.data().name;
       jobTitle = snap.data().role || '';
+      store = snap.data().store || '';
     }
   } catch(e) {}
   let role = 'employee';
   if (ADMIN_EMAILS.includes(user.email)) role = 'admin';
   else if (MANAGER_TITLES.includes(jobTitle)) role = 'manager';
-  const userData = { name, idNo, email: user.email, role, jobTitle, uid: user.uid };
+  const userData = { name, idNo, email: user.email, role, jobTitle, store, uid: user.uid };
   sessionStorage.setItem(cacheKey, JSON.stringify(userData));
   return userData;
 }
