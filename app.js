@@ -74,9 +74,8 @@ export function renderSidebar(ud, activePage, auth) {
 
   const userArea = document.getElementById('sb-user-area');
   if (userArea) {
-    const roleLabel = isAdmin ? '管理員' : (ud.jobTitle || '員工');
-    const storeLabel = ud.store ? `<div class="urole">${ud.store}</div>` : '';
-    userArea.innerHTML = `<div class="uname">${ud.name}</div><div class="urole">${roleLabel}</div>${storeLabel}`;
+    const roleLabel = isAdmin ? '管理員' : `${ud.store || ''}${ud.jobTitle || '員工'}`;
+    userArea.innerHTML = `<div class="uname">${ud.name}</div><div class="urole">${roleLabel}</div>`;
   }
 
   if (auth && canReview) initPasswordChange(auth);
