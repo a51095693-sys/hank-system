@@ -81,8 +81,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th><input type="checkbox" id="selectAllCb" onchange="toggleSelectAll(this.checked)" style="cursor:pointer;"></th><th>日期</th><th>提交者</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>標籤</th><th>描述</th><th>狀態</th><th>負責人</th><th>最新訊息</th><th></th></tr></thead>
-          <tbody id="dataTable"><tr><td colspan="12" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th><input type="checkbox" id="selectAllCb" onchange="toggleSelectAll(this.checked)" style="cursor:pointer;"></th><th>日期</th><th>提交者</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>標籤</th><th>描述</th><th>狀態</th><th>最新訊息</th><th></th></tr></thead>
+          <tbody id="dataTable"><tr><td colspan="11" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -149,10 +149,6 @@
       </select>
     </div>
     <div style="margin-bottom:12px;">
-      <label class="form-label">指派負責人</label>
-      <select class="form-control" id="mAssignee"><option value="">未指派</option></select>
-    </div>
-    <div style="margin-bottom:12px;">
       <label class="form-label">標籤</label>
       <select class="form-control" id="mTag"><option value="">無</option></select>
     </div>
@@ -211,15 +207,6 @@ window.showImage = (src) => { document.getElementById('imgLightboxImg').src = sr
 
 let _isManager = false;
 let _firstLoad = true;
-let _assigneeOptions = '<option value="">未指派</option>';
-
-async function loadAssignees() {
-  try {
-    const snap = await getDocs(collection(db, 'accounts'));
-    const names = snap.docs.map(d => d.data().name).filter(Boolean).sort();
-    _assigneeOptions = '<option value="">未指派</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
-  } catch(e) {}
-}
 
 async function loadTagsData() {
   _tags = await loadTags(db);
@@ -241,7 +228,6 @@ onAuthStateChanged(auth, async user => {
   if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
   _isManager = _ud.role === 'manager';
   renderSidebar(_ud, 'admin.html', auth);
-  loadAssignees();
   await loadTagsData();
   loadData();
 });
@@ -261,7 +247,7 @@ function lastMessage(e) {
 
 window.loadData = async () => {
   const tbody = document.getElementById('dataTable');
-  tbody.innerHTML = '<tr><td colspan="12" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
   try {
     const snap = await getDocs(collection(db, 'complaints'));
     const allDocs = (_isManager && _ud.store && _ud.store !== '總公司')
@@ -314,7 +300,7 @@ window.loadData = async () => {
     _records = {};
     document.getElementById('countBadge').textContent = `共 ${filtered.length} 筆`;
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="12" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>';
       return;
     }
 
@@ -341,14 +327,13 @@ window.loadData = async () => {
         <td data-label="標籤">${e.tag?`<span class="badge" style="background:${tagColor(e.tag)}1A;color:${tagColor(e.tag)};">${e.tag}</span>`:`<span class="text-muted" style="font-size:12px;">-</span>`}</td>
         <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.hasMedia?` <span title="含附件">📎${e.mediaCount>1?` ×${e.mediaCount}`:''}</span>`:''}</td>
         <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span>${overdueBadge}</td>
-        <td data-label="負責人">${e.assignedTo?`<span class="badge" style="background:#EDE9FE;color:#6D28D9;">${e.assignedTo}</span>`:`<span class="text-muted" style="font-size:12px;">-</span>`}</td>
         <td data-label="最新訊息" style="max-width:200px;">${replyHtml}</td>
         <td><div class="flex gap-2"><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDelComplaint('${d.id}','${e.store}')">刪除</button></div></td>
       </tr>`;
     }).join('');
     updateBatchUI();
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="12" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
 };
 
@@ -419,8 +404,6 @@ window.openModal = async (id) => {
   const e = _records[id]; if (!e) return;
   document.getElementById('mId').value = id;
   document.getElementById('mStatus').value = e.status;
-  document.getElementById('mAssignee').innerHTML = _assigneeOptions;
-  document.getElementById('mAssignee').value = e.assignedTo || '';
   document.getElementById('mTag').innerHTML = '<option value="">無</option>' + _tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
   document.getElementById('mTag').value = e.tag || '';
   document.getElementById('mReply').value = '';
@@ -566,12 +549,11 @@ window.createComplaint = async () => {
 window.saveReply = async () => {
   const id = document.getElementById('mId').value;
   const status = document.getElementById('mStatus').value;
-  const assignedTo = document.getElementById('mAssignee').value;
   const tag = document.getElementById('mTag').value;
   const text = document.getElementById('mReply').value.trim();
   try {
     const e = _records[id];
-    const updates = { status, assignedTo, tag };
+    const updates = { status, tag };
     if (status === '已結案') updates.closedAt = serverTimestamp();
     if (text) {
       const msgs = e.messages && e.messages.length ? e.messages.slice() : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
@@ -581,7 +563,6 @@ window.saveReply = async () => {
     await updateDoc(doc(db, 'complaints', id), updates);
     const logParts = [];
     if (status !== e.status) logParts.push(`狀態：${e.status} → ${status}`);
-    if (assignedTo !== (e.assignedTo || '')) logParts.push(`負責人：${e.assignedTo || '未指派'} → ${assignedTo || '未指派'}`);
     if (tag !== (e.tag || '')) logParts.push(`標籤：${e.tag || '無'} → ${tag || '無'}`);
     if (text) logParts.push(`新增回覆：${text.slice(0, 50)}${text.length > 50 ? '…' : ''}`);
     if (logParts.length) logAudit(db, _ud, '更新客訴', id, e.store, logParts.join('；'));
