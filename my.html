@@ -29,7 +29,7 @@
     <div class="page-title">📋 我的客訴</div>
 
     <!-- 個人統計 -->
-    <div class="stat-grid">
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);">
       <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
         <div style="font-size:32px;font-weight:700;color:var(--danger);" id="statPending">-</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px;">待處理</div>
@@ -41,6 +41,10 @@
       <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
         <div style="font-size:32px;font-weight:700;color:var(--success);" id="statDone">-</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px;">已結案</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
+        <div style="font-size:32px;font-weight:700;color:#3B82F6;" id="statUnread">-</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">新回覆</div>
       </div>
     </div>
 
@@ -97,7 +101,7 @@ import { getUserData, showToast, renderSidebar } from "./app.js";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, 'default');
-let _ud, _records = {};
+let _ud, _records = {}, _firstLoad = true;
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
@@ -148,10 +152,22 @@ window.loadData = async () => {
     ));
 
     const counts = { '待處理': 0, '處理中': 0, '已結案': 0 };
-    snap.docs.forEach(d => { const s = d.data().status; if (counts[s] !== undefined) counts[s]++; });
+    let unreadCount = 0;
+    snap.docs.forEach(d => {
+      const e = d.data();
+      if (counts[e.status] !== undefined) counts[e.status]++;
+      const m = lastMessage(e);
+      if (m && m.from === 'admin') unreadCount++;
+    });
     document.getElementById('statPending').textContent = counts['待處理'];
     document.getElementById('statProcessing').textContent = counts['處理中'];
     document.getElementById('statDone').textContent = counts['已結案'];
+    document.getElementById('statUnread').textContent = unreadCount;
+
+    if (_firstLoad) {
+      _firstLoad = false;
+      if (unreadCount > 0) showToast(`💬 您有 ${unreadCount} 筆客訴有新回覆`, 'success');
+    }
 
     if (snap.empty) {
       tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center" style="padding:24px;">尚無客訴記錄</td></tr>';
@@ -169,14 +185,15 @@ window.loadData = async () => {
       _records[d.id] = e;
       const search = [e.store, e.desc, e.item].join(' ').toLowerCase();
       const last = lastMessage(e);
+      const unread = last && last.from === 'admin';
       const lastHtml = last
-        ? `<div style="font-size:12px;"><strong>${last.from==='admin'?'廚房':'我'}：</strong>${last.text}</div>`
+        ? `<div style="font-size:12px;">${unread?'🔔 ':''}<strong>${last.from==='admin'?'廚房':'我'}：</strong>${last.text}</div>`
         : `<span class="text-muted" style="font-size:12px;">尚無對話</span>`;
       const mediaHtml = e.hasMedia
         ? `<button class="btn btn-outline btn-sm" onclick="viewMedia('${d.id}')">📎 查看照片</button>`
         : `<span class="text-muted" style="font-size:12px;">-</span>`;
       const time = e.createdAt?.toDate ? e.createdAt.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '-';
-      return `<tr data-search="${search}">
+      return `<tr data-search="${search}" style="${unread?'background:#EFF6FF;':''}">
         <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
         <td data-label="時間" style="white-space:nowrap;">${time}</td>
         <td data-label="門市／客戶"><strong>${e.store}</strong></td>
