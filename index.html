@@ -67,7 +67,7 @@ const db = getFirestore(app, 'default');
 onAuthStateChanged(auth, async u => {
   if (!u) return;
   const ud = await getUserData(db, u);
-  window.location.href = ud.role === 'admin' ? 'admin.html' : 'submit.html';
+  window.location.href = (ud.role === 'admin' || ud.role === 'manager') ? 'admin.html' : 'submit.html';
 });
 
 document.getElementById('idNo').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('pwd').focus(); });

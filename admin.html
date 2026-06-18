@@ -178,13 +178,23 @@ window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle(
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
 window.showImage = (src) => { document.getElementById('imgLightboxImg').src = src; document.getElementById('imgLightbox').style.display = 'flex'; };
 
+let _isManager = false;
+
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
   _ud = await getUserData(db, user);
-  if (_ud.role !== 'admin') { window.location.href = 'submit.html'; return; }
+  if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
+  _isManager = _ud.role === 'manager';
   renderSidebar(_ud, 'admin.html', auth);
   loadData();
 });
+
+const OVERDUE_MS = 7 * 24 * 60 * 60 * 1000;
+function isOverdue(e) {
+  if (e.status === '已結案') return false;
+  if (!e.createdAt?.seconds) return false;
+  return (Date.now() - e.createdAt.seconds * 1000) > OVERDUE_MS;
+}
 
 function lastMessage(e) {
   if (e.messages && e.messages.length) return e.messages[e.messages.length - 1];
@@ -239,6 +249,10 @@ window.loadData = async () => {
       const replyHtml = lm
         ? `<div style="font-size:12px;color:var(--success);line-height:1.5;">💬 ${lm.text}${lm.name ? `<div style="color:var(--text3);font-size:11px;margin-top:2px;">— ${lm.name}</div>` : ''}</div>`
         : `<span style="color:var(--text3);font-size:12px;">-</span>`;
+      const overdue = isOverdue(e);
+      const overdueBadge = overdue
+        ? (e.overdueReason ? ` <span title="逾期原因：${e.overdueReason}" style="font-size:11px;">📝已說明</span>` : ` <span title="已逾期一週未結案" style="font-size:11px;color:var(--danger);">⚠️逾期</span>`)
+        : '';
       return `<tr data-search="${search}" style="${e.status==='待處理'?'background:#FFF5F5;':''}">
         <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
         <td data-label="提交者"><span class="badge badge-blue">${e.submittedBy||'-'}</span></td>
@@ -246,7 +260,7 @@ window.loadData = async () => {
         <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
         <td data-label="品項">${e.item||'-'}</td>
         <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.hasMedia?` <span title="含附件">📎</span>`:''}</td>
-        <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span></td>
+        <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span>${overdueBadge}</td>
         <td data-label="最新訊息" style="max-width:200px;">${replyHtml}</td>
         <td><div class="flex gap-2"><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDelComplaint('${d.id}','${e.store}')">刪除</button></div></td>
       </tr>`;
@@ -283,12 +297,34 @@ window.openModal = async (id) => {
   document.getElementById('mStatus').value = e.status;
   document.getElementById('mReply').value = '';
   document.getElementById('threadBox').innerHTML = renderThread(e);
+  const overdue = isOverdue(e);
+  let overdueHtml = '';
+  if (overdue) {
+    if (e.overdueReason) {
+      overdueHtml = `<div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;">
+        <strong style="color:#B45309;">⚠️ 已逾期一週未結案</strong>
+        <div style="margin-top:4px;font-size:13px;">原因：${e.overdueReason}（${e.overdueReasonBy||''}）</div>
+      </div>`;
+    } else if (_isManager) {
+      overdueHtml = `<div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;">
+        <strong style="color:#B45309;">⚠️ 已逾期一週未結案，請說明原因</strong>
+        <textarea class="form-control" id="mOverdueReason" placeholder="請說明逾期原因…" style="min-height:60px;margin-top:8px;"></textarea>
+        <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="saveOverdueReason('${id}')">送出原因</button>
+      </div>`;
+    } else {
+      overdueHtml = `<div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;">
+        <strong style="color:#B45309;">⚠️ 已逾期一週未結案</strong>
+        <div style="margin-top:4px;font-size:12px;color:var(--text3);">尚未由廠長／副廠長說明逾期原因</div>
+      </div>`;
+    }
+  }
   document.getElementById('modalInfo').innerHTML = `
     <div><strong>日期：</strong>${e.date}　<strong>提交者：</strong>${e.submittedBy||'-'}</div>
     <div><strong>門市／客戶：</strong>${e.store}　<strong>類型：</strong>${e.type}</div>
     ${e.item?`<div><strong>品項：</strong>${e.item}</div>`:''}
     <div style="margin-top:6px;"><strong>描述：</strong>${e.desc}</div>
     ${e.hasMedia?`<div style="margin-top:8px;" id="modalMedia">圖片載入中…</div>`:''}
+    ${overdueHtml}
   `;
   document.getElementById('replyModal').classList.add('open');
   if (e.hasMedia) {
@@ -308,6 +344,26 @@ window.openModal = async (id) => {
 };
 
 window.closeModal = () => document.getElementById('replyModal').classList.remove('open');
+
+window.saveOverdueReason = async (id) => {
+  const ta = document.getElementById('mOverdueReason');
+  const text = ta.value.trim();
+  if (!text) { showToast('請輸入逾期原因', 'error'); return; }
+  try {
+    await updateDoc(doc(db, 'complaints', id), {
+      overdueReason: text,
+      overdueReasonBy: _ud.name,
+      overdueReasonAt: Date.now()
+    });
+    _records[id].overdueReason = text;
+    _records[id].overdueReasonBy = _ud.name;
+    showToast('已送出逾期原因', 'success');
+    openModal(id);
+    loadData();
+  } catch(err) {
+    showToast('送出失敗', 'error');
+  }
+};
 
 window.openDelComplaint = (id, store) => {
   document.getElementById('delComplaintId').value = id;

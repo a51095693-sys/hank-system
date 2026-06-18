@@ -15,27 +15,37 @@ export function showToast(msg, type = '') {
 }
 
 const ADMIN_EMAILS = ['a51095693@complaint.local'];
+const MANAGER_TITLES = ['廠長', '副廠長'];
 
 export async function getUserData(db, user) {
   const cacheKey = 'ud_' + user.uid;
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch(e) {} }
   const idNo = user.email.split('@')[0];
-  const role = ADMIN_EMAILS.includes(user.email) ? 'admin' : 'employee';
-  let name = idNo;
+  let name = idNo, jobTitle = '';
   try {
     const snap = await getDoc(doc(db, 'accounts', user.uid));
-    if (snap.exists() && snap.data().name) name = snap.data().name;
+    if (snap.exists()) {
+      if (snap.data().name) name = snap.data().name;
+      jobTitle = snap.data().role || '';
+    }
   } catch(e) {}
-  const userData = { name, idNo, email: user.email, role, uid: user.uid };
+  let role = 'employee';
+  if (ADMIN_EMAILS.includes(user.email)) role = 'admin';
+  else if (MANAGER_TITLES.includes(jobTitle)) role = 'manager';
+  const userData = { name, idNo, email: user.email, role, jobTitle, uid: user.uid };
   sessionStorage.setItem(cacheKey, JSON.stringify(userData));
   return userData;
 }
 
 export function renderSidebar(ud, activePage, auth) {
   const isAdmin = ud.role === 'admin';
+  const isManager = ud.role === 'manager';
+  const canReview = isAdmin || isManager;
   const pages = isAdmin
     ? [['admin.html','📋','所有客訴'],['account.html','👥','帳號管理']]
+    : isManager
+    ? [['admin.html','📋','所有客訴']]
     : [['submit.html','📝','提交客訴'],['my.html','📋','我的客訴']];
 
   const nav = document.getElementById('sb-nav');
@@ -43,7 +53,7 @@ export function renderSidebar(ud, activePage, auth) {
     nav.innerHTML = pages.map(([href, ic, label]) =>
       `<a href="${href}" class="nav-item${href===activePage?' active':''}"><span class="ic">${ic}</span>${label}</a>`
     ).join('');
-    if (isAdmin) {
+    if (canReview) {
       nav.innerHTML += `<button class="nav-item" onclick="openPwdModal()"><span class="ic">🔒</span>修改密碼</button>`;
     }
     nav.innerHTML += `<button class="nav-item" onclick="doSignOut()"><span class="ic">🚪</span>登出</button>`;
@@ -51,10 +61,11 @@ export function renderSidebar(ud, activePage, auth) {
 
   const userArea = document.getElementById('sb-user-area');
   if (userArea) {
-    userArea.innerHTML = `<div class="uname">${ud.name}</div><div class="urole">${isAdmin?'管理員':'員工'}</div>`;
+    const roleLabel = isAdmin ? '管理員' : isManager ? ud.jobTitle : '員工';
+    userArea.innerHTML = `<div class="uname">${ud.name}</div><div class="urole">${roleLabel}</div>`;
   }
 
-  if (auth && isAdmin) initPasswordChange(auth);
+  if (auth && canReview) initPasswordChange(auth);
 }
 
 function initPasswordChange(auth) {
