@@ -29,8 +29,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>建立時間</th><th></th></tr></thead>
-          <tbody id="acTable"><tr><td colspan="5" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>建立時間</th><th></th><th></th></tr></thead>
+          <tbody id="acTable"><tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -69,6 +69,30 @@
   </div>
 </div>
 
+<!-- 編輯帳號 Modal -->
+<div class="modal-bg" id="editModal">
+  <div class="modal">
+    <div class="modal-title">✏️ 編輯帳號</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">帳號：<strong id="eIdNo"></strong></div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">姓名 *</label>
+      <input type="text" class="form-control" id="eName" placeholder="員工姓名">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label class="form-label">角色</label>
+      <select class="form-control" id="eRole">
+        <option value="employee">員工</option>
+        <option value="admin">管理員</option>
+      </select>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="editBtn" onclick="saveEdit()">儲存</button>
+      <button class="btn btn-outline" onclick="closeEdit()">取消</button>
+    </div>
+    <input type="hidden" id="eId">
+  </div>
+</div>
+
 <!-- 確認刪除 Modal -->
 <div class="modal-bg" id="delModal">
   <div class="modal" style="max-width:360px;">
@@ -85,7 +109,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signOut as fbSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, setDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar } from "./app.js";
 
@@ -106,19 +130,23 @@ onAuthStateChanged(auth, async user => {
   loadAccounts();
 });
 
+let _accounts = {};
+
 async function loadAccounts() {
   const tbody = document.getElementById('acTable');
   try {
     const snap = await getDocs(collection(db, 'accounts'));
     if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">尚無帳號記錄<br><span style="font-size:11px;">點擊「新增帳號」建立員工帳號</span></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">尚無帳號記錄<br><span style="font-size:11px;">點擊「新增帳號」建立員工帳號</span></td></tr>';
       return;
     }
     const sorted = snap.docs.slice().sort((a, b) =>
       (a.data().createdAt?.seconds || 0) - (b.data().createdAt?.seconds || 0)
     );
+    _accounts = {};
     tbody.innerHTML = sorted.map(d => {
       const e = d.data();
+      _accounts[d.id] = e;
       const roleLabel = e.role === 'admin' ? '<span class="badge badge-blue">管理員</span>' : '<span class="badge" style="background:#F1F5F9;color:var(--text2);">員工</span>';
       const createdAt = e.createdAt?.toDate ? e.createdAt.toDate().toLocaleDateString('zh-TW') : '-';
       return `<tr>
@@ -126,11 +154,12 @@ async function loadAccounts() {
         <td data-label="姓名"><strong>${e.name}</strong></td>
         <td data-label="角色">${roleLabel}</td>
         <td data-label="建立時間" style="font-size:12px;color:var(--text3);">${createdAt}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="openEdit('${d.id}')">編輯</button></td>
         <td><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDel('${d.id}','${e.name}')">刪除</button></td>
       </tr>`;
     }).join('');
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
 }
 
@@ -178,6 +207,37 @@ window.createAccount = async () => {
   }
 };
 
+window.openEdit = (id) => {
+  const e = _accounts[id];
+  if (!e) return;
+  document.getElementById('eId').value = id;
+  document.getElementById('eIdNo').textContent = e.idNo;
+  document.getElementById('eName').value = e.name;
+  document.getElementById('eRole').value = e.role;
+  document.getElementById('editModal').classList.add('open');
+};
+window.closeEdit = () => document.getElementById('editModal').classList.remove('open');
+
+window.saveEdit = async () => {
+  const id = document.getElementById('eId').value;
+  const name = document.getElementById('eName').value.trim();
+  const role = document.getElementById('eRole').value;
+  if (!name) { showToast('請輸入姓名', 'error'); return; }
+  const btn = document.getElementById('editBtn');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  try {
+    await updateDoc(doc(db, 'accounts', id), { name, role });
+    if (id === auth.currentUser.uid) sessionStorage.removeItem('ud_' + id);
+    showToast('帳號已更新', 'success');
+    closeEdit();
+    loadAccounts();
+  } catch(err) {
+    showToast('更新失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '儲存';
+  }
+};
+
 window.openDel = (id, name) => {
   document.getElementById('delId').value = id;
   document.getElementById('delName').textContent = name;
@@ -202,6 +262,7 @@ window.confirmDelete = async () => {
 };
 
 document.getElementById('addModal').addEventListener('click', e => { if(e.target===document.getElementById('addModal')) closeAdd(); });
+document.getElementById('editModal').addEventListener('click', e => { if(e.target===document.getElementById('editModal')) closeEdit(); });
 document.getElementById('delModal').addEventListener('click', e => { if(e.target===document.getElementById('delModal')) closeDel(); });
 </script>
 </body>
