@@ -43,9 +43,9 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['admin.html','📋','所有客訴'],['account.html','👥','帳號管理']]
+    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['account.html','👥','帳號管理']]
     : isManager
-    ? [['admin.html','📋','所有客訴']]
+    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案']]
     : [['submit.html','📝','提交客訴'],['my.html','📋','我的客訴']];
 
   const nav = document.getElementById('sb-nav');
