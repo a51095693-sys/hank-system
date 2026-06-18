@@ -441,6 +441,7 @@ window.saveReply = async () => {
   try {
     const e = _records[id];
     const updates = { status };
+    if (status === '已結案') updates.closedAt = serverTimestamp();
     if (text) {
       const msgs = e.messages && e.messages.length ? e.messages.slice() : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
       msgs.push({ from: 'admin', name: _ud.name, text, at: Date.now() });

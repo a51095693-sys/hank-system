@@ -83,7 +83,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, getDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, getDoc, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar } from "./app.js";
 
@@ -260,6 +260,7 @@ window.saveReply = async () => {
   try {
     const e = _records[id];
     const updates = { status };
+    if (status === '已結案') updates.closedAt = serverTimestamp();
     if (text) {
       const msgs = e.messages && e.messages.length ? e.messages.slice() : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
       msgs.push({ from: 'admin', name: _ud.name, text, at: Date.now() });

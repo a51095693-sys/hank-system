@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 數據報表</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">📊 數據報表</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📢 客訴反饋系統</h2><p>管理端</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title">📊 數據報表</div>
+
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
+        <div style="font-size:32px;font-weight:700;color:var(--primary);" id="statTotal">-</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">總客訴數</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
+        <div style="font-size:32px;font-weight:700;color:var(--success);" id="statDoneRate">-</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">已結案比例</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
+        <div style="font-size:32px;font-weight:700;color:var(--text1);" id="statAvgDays">-</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">平均結案天數</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
+        <div style="font-size:32px;font-weight:700;color:#B45309;" id="statOverdueRate">-</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">目前逾期比例</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;" id="chartGrid">
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;">客訴類型分布</div>
+        <div style="height:260px;"><canvas id="chartType"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;">門市／客戶排行（Top 10）</div>
+        <div style="height:260px;"><canvas id="chartStore"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;">每月客訴趨勢</div>
+        <div style="height:260px;"><canvas id="chartTrend"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;">每月平均結案天數</div>
+        <div style="height:260px;" id="chartCloseTimeWrap"><canvas id="chartCloseTime"></canvas></div>
+        <div id="closeTimeEmpty" style="display:none;height:260px;align-items:center;justify-content:center;color:var(--text3);font-size:12px;text-align:center;line-height:1.6;">
+          尚無可統計的結案時效資料<br>（此功能從現在開始累積，舊的已結案客訴需重新確認狀態後才會被計入）
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  const ud = await getUserData(db, user);
+  if (ud.role !== 'admin') { window.location.href = ud.role === 'manager' ? 'admin.html' : 'submit.html'; return; }
+  renderSidebar(ud, 'report.html', auth);
+  loadReport();
+});
+
+const OVERDUE_MS = 2 * 24 * 60 * 60 * 1000;
+function isOverdue(e) {
+  if (e.status === '已結案') return false;
+  if (!e.createdAt?.seconds) return false;
+  return (Date.now() - e.createdAt.seconds * 1000) > OVERDUE_MS;
+}
+
+let _charts = [];
+
+async function loadReport() {
+  try {
+    const snap = await getDocs(collection(db, 'complaints'));
+    const docs = snap.docs.map(d => d.data());
+    const total = docs.length;
+
+    const doneCount = docs.filter(e => e.status === '已結案').length;
+    const doneRate = total ? Math.round(doneCount / total * 100) : 0;
+
+    const activeDocs = docs.filter(e => e.status !== '已結案');
+    const overdueCount = activeDocs.filter(isOverdue).length;
+    const overdueRate = activeDocs.length ? Math.round(overdueCount / activeDocs.length * 100) : 0;
+
+    const closedWithTime = docs.filter(e => e.status === '已結案' && e.closedAt?.seconds && e.createdAt?.seconds);
+    const avgDays = closedWithTime.length
+      ? (closedWithTime.reduce((sum, e) => sum + (e.closedAt.seconds - e.createdAt.seconds), 0) / closedWithTime.length / 86400)
+      : null;
+
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statDoneRate').textContent = total ? doneRate + '%' : '-';
+    document.getElementById('statAvgDays').textContent = avgDays !== null ? avgDays.toFixed(1) + ' 天' : '-';
+    document.getElementById('statOverdueRate').textContent = activeDocs.length ? overdueRate + '%' : '-';
+
+    const types = ['品質問題', '配送問題', '數量問題', '其他'];
+    const typeCounts = types.map(t => docs.filter(e => e.type === t).length);
+
+    const storeMap = {};
+    docs.forEach(e => { const s = e.store || '未填寫'; storeMap[s] = (storeMap[s] || 0) + 1; });
+    const storeSorted = Object.entries(storeMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    const monthMap = {};
+    docs.forEach(e => { if (!e.date) return; const m = e.date.slice(0, 7); monthMap[m] = (monthMap[m] || 0) + 1; });
+    const months = Object.keys(monthMap).sort();
+
+    const monthCloseMap = {};
+    closedWithTime.forEach(e => {
+      const m = new Date(e.createdAt.seconds * 1000).toISOString().slice(0, 7);
+      (monthCloseMap[m] = monthCloseMap[m] || []).push((e.closedAt.seconds - e.createdAt.seconds) / 86400);
+    });
+    const closeMonths = Object.keys(monthCloseMap).sort();
+    const closeAvgs = closeMonths.map(m => {
+      const arr = monthCloseMap[m];
+      return +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1);
+    });
+
+    renderCharts({
+      types, typeCounts,
+      storeLabels: storeSorted.map(x => x[0]), storeCounts: storeSorted.map(x => x[1]),
+      months, monthCounts: months.map(m => monthMap[m]),
+      closeMonths, closeAvgs
+    });
+  } catch (err) {
+    showToast('報表載入失敗', 'error');
+  }
+}
+
+function renderCharts(d) {
+  _charts.forEach(c => c.destroy());
+  _charts = [];
+
+  _charts.push(new Chart(document.getElementById('chartType'), {
+    type: 'doughnut',
+    data: { labels: d.types, datasets: [{ data: d.typeCounts, backgroundColor: ['#F97316', '#3B82F6', '#A855F7', '#64748B'] }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  }));
+
+  _charts.push(new Chart(document.getElementById('chartStore'), {
+    type: 'bar',
+    data: { labels: d.storeLabels, datasets: [{ label: '客訴數', data: d.storeCounts, backgroundColor: '#F97316' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { precision: 0 } } }
+    }
+  }));
+
+  _charts.push(new Chart(document.getElementById('chartTrend'), {
+    type: 'line',
+    data: { labels: d.months, datasets: [{ label: '客訴數', data: d.monthCounts, borderColor: '#F97316', backgroundColor: 'rgba(249,115,22,.15)', fill: true, tension: .3 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { precision: 0 } } } }
+  }));
+
+  const closeWrap = document.getElementById('chartCloseTimeWrap');
+  const closeEmpty = document.getElementById('closeTimeEmpty');
+  if (d.closeMonths.length === 0) {
+    closeWrap.style.display = 'none';
+    closeEmpty.style.display = 'flex';
+  } else {
+    closeWrap.style.display = 'block';
+    closeEmpty.style.display = 'none';
+    _charts.push(new Chart(document.getElementById('chartCloseTime'), {
+      type: 'bar',
+      data: { labels: d.closeMonths, datasets: [{ label: '平均結案天數', data: d.closeAvgs, backgroundColor: '#16A34A' }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    }));
+  }
+}
+</script>
+</body>
+</html>
