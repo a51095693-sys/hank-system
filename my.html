@@ -86,6 +86,15 @@
   </div>
 </div>
 
+<!-- 照片瀏覽 Modal -->
+<div class="modal-bg" id="mediaModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">📎 附加照片</div>
+    <div id="mediaGalleryBox" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;"></div>
+    <button class="btn btn-outline w-full" onclick="document.getElementById('mediaModal').classList.remove('open')">關閉</button>
+  </div>
+</div>
+
 <!-- 圖片放大檢視 -->
 <div id="imgLightbox" onclick="this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;align-items:center;justify-content:center;cursor:zoom-out;">
   <img id="imgLightboxImg" style="max-width:92vw;max-height:92vh;border-radius:8px;">
@@ -94,7 +103,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, getDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar } from "./app.js";
 
@@ -108,9 +117,14 @@ window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); wi
 window.showImage = (src) => { document.getElementById('imgLightboxImg').src = src; document.getElementById('imgLightbox').style.display = 'flex'; };
 window.viewMedia = async (id) => {
   try {
-    const snap = await getDoc(doc(db, 'complaints', id, 'media', 'img'));
-    if (snap.exists()) showImage(snap.data().url);
-    else showToast('圖片載入失敗', 'error');
+    const snap = await getDocs(collection(db, 'complaints', id, 'media'));
+    const urls = snap.docs.map(d => d.data().url).filter(Boolean);
+    if (!urls.length) { showToast('圖片載入失敗', 'error'); return; }
+    if (urls.length === 1) { showImage(urls[0]); return; }
+    document.getElementById('mediaGalleryBox').innerHTML = urls.map(u =>
+      `<img src="${u}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;cursor:zoom-in;" onclick="showImage('${u}')">`
+    ).join('');
+    document.getElementById('mediaModal').classList.add('open');
   } catch(err) { showToast('圖片載入失敗', 'error'); }
 };
 
@@ -190,7 +204,7 @@ window.loadData = async () => {
         ? `<div style="font-size:12px;">${unread?'🔔 ':''}<strong>${last.from==='admin'?'廚房':'我'}：</strong>${last.text}</div>`
         : `<span class="text-muted" style="font-size:12px;">尚無對話</span>`;
       const mediaHtml = e.hasMedia
-        ? `<button class="btn btn-outline btn-sm" onclick="viewMedia('${d.id}')">📎 查看照片</button>`
+        ? `<button class="btn btn-outline btn-sm" onclick="viewMedia('${d.id}')">📎 查看照片${e.mediaCount>1?`（${e.mediaCount}）`:''}</button>`
         : `<span class="text-muted" style="font-size:12px;">-</span>`;
       const time = e.createdAt?.toDate ? e.createdAt.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '-';
       return `<tr data-search="${search}" style="${unread?'background:#EFF6FF;':''}">
@@ -249,6 +263,7 @@ window.sendMessage = async () => {
 };
 
 document.getElementById('threadModal').addEventListener('click', e => { if(e.target===document.getElementById('threadModal')) closeThread(); });
+document.getElementById('mediaModal').addEventListener('click', e => { if(e.target===document.getElementById('mediaModal')) e.target.classList.remove('open'); });
 
 window.filterTable = () => {
   const kw = document.getElementById('searchInput').value.toLowerCase();

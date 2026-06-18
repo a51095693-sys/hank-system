@@ -171,7 +171,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar, todayStr, logAudit, STORES } from "./app.js";
 
@@ -280,7 +280,7 @@ window.loadData = async () => {
         <td data-label="門市／客戶"><strong>${e.store}</strong></td>
         <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
         <td data-label="品項">${e.item||'-'}</td>
-        <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.hasMedia?` <span title="含附件">📎</span>`:''}</td>
+        <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.hasMedia?` <span title="含附件">📎${e.mediaCount>1?` ×${e.mediaCount}`:''}</span>`:''}</td>
         <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span>${overdueBadge}</td>
         <td data-label="最新訊息" style="max-width:200px;">${replyHtml}</td>
         <td><div class="flex gap-2"><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDelComplaint('${d.id}','${e.store}')">刪除</button></div></td>
@@ -350,11 +350,12 @@ window.openModal = async (id) => {
   document.getElementById('replyModal').classList.add('open');
   if (e.hasMedia) {
     try {
-      const mSnap = await getDoc(doc(db, 'complaints', id, 'media', 'img'));
+      const mSnap = await getDocs(collection(db, 'complaints', id, 'media'));
+      const urls = mSnap.docs.map(d => d.data().url).filter(Boolean);
       const box = document.getElementById('modalMedia');
       if (box) {
-        box.innerHTML = mSnap.exists()
-          ? `<img src="${mSnap.data().url}" style="max-width:100%;max-height:240px;border-radius:8px;cursor:zoom-in;" onclick="showImage(this.src)">`
+        box.innerHTML = urls.length
+          ? `<div style="display:flex;gap:8px;flex-wrap:wrap;">${urls.map(u => `<img src="${u}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;cursor:zoom-in;" onclick="showImage(this.src)">`).join('')}</div>`
           : `<span class="text-muted" style="font-size:12px;">圖片載入失敗</span>`;
       }
     } catch(err) {
