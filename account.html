@@ -55,10 +55,17 @@
       <input type="password" class="form-control" id="aPwd" placeholder="生日6位數字" maxlength="6" inputmode="numeric">
     </div>
     <div style="margin-bottom:12px;">
-      <label class="form-label">角色</label>
+      <label class="form-label">職稱</label>
       <select class="form-control" id="aRole">
-        <option value="employee">員工</option>
-        <option value="admin">管理員</option>
+        <option value="營運總監">營運總監</option>
+        <option value="央廚總監">央廚總監</option>
+        <option value="開發經理">開發經理</option>
+        <option value="財務經理">財務經理</option>
+        <option value="助理">助理</option>
+        <option value="店長">店長</option>
+        <option value="副店長">副店長</option>
+        <option value="廠長">廠長</option>
+        <option value="副廠長">副廠長</option>
       </select>
     </div>
     <div style="margin-bottom:16px;">
@@ -209,7 +216,7 @@ async function loadAccounts() {
 
 window.openAdd = () => {
   ['aIdNo','aName','aPwd'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('aRole').value = 'employee';
+  document.getElementById('aRole').selectedIndex = 0;
   document.getElementById('aStore').selectedIndex = 0;
   document.getElementById('emailPreview').textContent = '帳號@complaint.local';
   document.getElementById('addModal').classList.add('open');
