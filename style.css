@@ -35,6 +35,8 @@ a{text-decoration:none;color:inherit}
 .form-control{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text1);background:var(--surface2);transition:.15s}
 .form-control:focus{outline:none;border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(249,115,22,.1)}
 textarea.form-control{resize:vertical;min-height:72px}
+input[type="date"].form-control{padding:9px 8px}
+input[type="date"].form-control::-webkit-date-and-time-value{text-align:left;min-width:100%}
 
 /* Buttons */
 .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;display:inline-flex;align-items:center;gap:5px}
