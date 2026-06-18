@@ -1,5 +1,5 @@
 import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 export function todayStr() {
   const d = new Date();
@@ -32,7 +32,7 @@ export async function getUserData(db, user) {
   return userData;
 }
 
-export function renderSidebar(ud, activePage, auth, db) {
+export function renderSidebar(ud, activePage, auth) {
   const isAdmin = ud.role === 'admin';
   const pages = isAdmin
     ? [['admin.html','📋','所有客訴'],['account.html','👥','帳號管理']]
@@ -43,7 +43,6 @@ export function renderSidebar(ud, activePage, auth, db) {
     nav.innerHTML = pages.map(([href, ic, label]) =>
       `<a href="${href}" class="nav-item${href===activePage?' active':''}"><span class="ic">${ic}</span>${label}</a>`
     ).join('');
-    if (isAdmin) nav.innerHTML += `<button class="nav-item" onclick="openTitleModal()"><span class="ic">✏️</span>設定稱謂</button>`;
     nav.innerHTML += `<button class="nav-item" onclick="openPwdModal()"><span class="ic">🔒</span>修改密碼</button>`;
     nav.innerHTML += `<button class="nav-item" onclick="doSignOut()"><span class="ic">🚪</span>登出</button>`;
   }
@@ -54,58 +53,6 @@ export function renderSidebar(ud, activePage, auth, db) {
   }
 
   if (auth) initPasswordChange(auth);
-  if (db && isAdmin) initTitleChange(db, ud);
-}
-
-function initTitleChange(db, ud) {
-  if (document.getElementById('titleModal')) return;
-  const wrap = document.createElement('div');
-  wrap.innerHTML = `
-  <div class="modal-bg" id="titleModal">
-    <div class="modal" style="max-width:360px;">
-      <div class="modal-title">✏️ 設定稱謂</div>
-      <div style="margin-bottom:16px;">
-        <label class="form-label">顯示名稱 *</label>
-        <input type="text" class="form-control" id="titleName" placeholder="希望別人怎麼稱呼您">
-      </div>
-      <div class="flex gap-2">
-        <button class="btn btn-primary w-full" id="titleSaveBtn">儲存</button>
-        <button class="btn btn-outline" id="titleCancelBtn">取消</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.appendChild(wrap.firstElementChild);
-
-  const modal = document.getElementById('titleModal');
-  const close = () => modal.classList.remove('open');
-  window.openTitleModal = () => {
-    document.getElementById('titleName').value = ud.name;
-    modal.classList.add('open');
-  };
-  modal.addEventListener('click', e => { if (e.target === modal) close(); });
-  document.getElementById('titleCancelBtn').addEventListener('click', close);
-
-  document.getElementById('titleSaveBtn').addEventListener('click', async () => {
-    const newName = document.getElementById('titleName').value.trim();
-    if (!newName) { showToast('請輸入顯示名稱', 'error'); return; }
-    const btn = document.getElementById('titleSaveBtn');
-    btn.disabled = true; btn.textContent = '儲存中…';
-    try {
-      await setDoc(doc(db, 'accounts', ud.uid), {
-        uid: ud.uid, idNo: ud.idNo, email: ud.email, role: ud.role, name: newName
-      }, { merge: true });
-      ud.name = newName;
-      sessionStorage.setItem('ud_' + ud.uid, JSON.stringify(ud));
-      const userArea = document.getElementById('sb-user-area');
-      if (userArea) userArea.querySelector('.uname').textContent = newName;
-      showToast('稱謂已更新', 'success');
-      close();
-    } catch(err) {
-      showToast('更新失敗，請重試', 'error');
-    } finally {
-      btn.disabled = false; btn.textContent = '儲存';
-    }
-  });
 }
 
 function initPasswordChange(auth) {
