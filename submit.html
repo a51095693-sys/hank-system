@@ -68,7 +68,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, setDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, todayStr, renderSidebar } from "./app.js";
 
@@ -152,16 +152,19 @@ window.submitComplaint = async () => {
       btn.textContent = '處理圖片中…';
       mediaUrl = await compressImage(file);
     }
-    await addDoc(collection(db, 'complaints'), {
+    const docRef = await addDoc(collection(db, 'complaints'), {
       date, store,
       type: document.getElementById('fType').value,
       item: document.getElementById('fItem').value.trim(),
       desc,
-      mediaUrl,
+      hasMedia: !!mediaUrl,
       status: '待處理', messages: [],
       submittedBy: _ud.name, submittedUid: auth.currentUser.uid,
       createdAt: serverTimestamp()
     });
+    if (mediaUrl) {
+      await setDoc(doc(db, 'complaints', docRef.id, 'media', 'img'), { url: mediaUrl });
+    }
     showToast('客訴已送出', 'success');
     ['fStore','fItem','fDesc'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('fType').value = '品質問題';

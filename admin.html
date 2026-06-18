@@ -165,7 +165,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar, todayStr } from "./app.js";
 
@@ -245,7 +245,7 @@ window.loadData = async () => {
         <td data-label="門市／客戶"><strong>${e.store}</strong></td>
         <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
         <td data-label="品項">${e.item||'-'}</td>
-        <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.mediaUrl?` <span title="含附件">📎</span>`:''}</td>
+        <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.hasMedia?` <span title="含附件">📎</span>`:''}</td>
         <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span></td>
         <td data-label="最新訊息" style="max-width:200px;">${replyHtml}</td>
         <td><div class="flex gap-2"><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDelComplaint('${d.id}','${e.store}')">刪除</button></div></td>
@@ -277,7 +277,7 @@ function renderThread(e) {
   }).join('');
 }
 
-window.openModal = (id) => {
+window.openModal = async (id) => {
   const e = _records[id]; if (!e) return;
   document.getElementById('mId').value = id;
   document.getElementById('mStatus').value = e.status;
@@ -288,9 +288,23 @@ window.openModal = (id) => {
     <div><strong>門市／客戶：</strong>${e.store}　<strong>類型：</strong>${e.type}</div>
     ${e.item?`<div><strong>品項：</strong>${e.item}</div>`:''}
     <div style="margin-top:6px;"><strong>描述：</strong>${e.desc}</div>
-    ${e.mediaUrl?`<div style="margin-top:8px;"><img src="${e.mediaUrl}" style="max-width:100%;max-height:240px;border-radius:8px;cursor:zoom-in;" onclick="showImage(this.src)"></div>`:''}
+    ${e.hasMedia?`<div style="margin-top:8px;" id="modalMedia">圖片載入中…</div>`:''}
   `;
   document.getElementById('replyModal').classList.add('open');
+  if (e.hasMedia) {
+    try {
+      const mSnap = await getDoc(doc(db, 'complaints', id, 'media', 'img'));
+      const box = document.getElementById('modalMedia');
+      if (box) {
+        box.innerHTML = mSnap.exists()
+          ? `<img src="${mSnap.data().url}" style="max-width:100%;max-height:240px;border-radius:8px;cursor:zoom-in;" onclick="showImage(this.src)">`
+          : `<span class="text-muted" style="font-size:12px;">圖片載入失敗</span>`;
+      }
+    } catch(err) {
+      const box = document.getElementById('modalMedia');
+      if (box) box.innerHTML = `<span class="text-muted" style="font-size:12px;">圖片載入失敗</span>`;
+    }
+  }
 };
 
 window.closeModal = () => document.getElementById('replyModal').classList.remove('open');
