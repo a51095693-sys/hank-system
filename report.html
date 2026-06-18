@@ -12,6 +12,12 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+@media print {
+  .sidebar, .mob-header, .mob-overlay, .toast, #reportToolbar { display:none !important; }
+  .main { margin-left:0 !important; padding:0 !important; }
+}
+</style>
 </head>
 <body>
 <div class="mob-header">
@@ -28,6 +34,21 @@
   </aside>
   <main class="main">
     <div class="page-title">📊 數據報表</div>
+
+    <div class="card" id="reportToolbar" style="padding:14px 20px;margin-bottom:16px;">
+      <div class="flex gap-2 flex-wrap items-center">
+        <input type="date" class="form-control" id="filterDateFrom" style="width:auto;" onchange="applyFilters()" title="起始日期">
+        <span style="color:var(--text3);">～</span>
+        <input type="date" class="form-control" id="filterDateTo" style="width:auto;" onchange="applyFilters()" title="結束日期">
+        <select class="form-control" id="filterStore" style="width:auto;" onchange="applyFilters()">
+          <option value="">全部門市／客戶</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('filterDateFrom').value='';document.getElementById('filterDateTo').value='';document.getElementById('filterStore').value='';applyFilters()">✕ 清除篩選</button>
+        <button class="btn btn-outline btn-sm" onclick="loadReport()">🔄 重新整理</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 匯出 CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 列印報表</button>
+      </div>
+    </div>
 
     <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);">
       <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
@@ -78,7 +99,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar } from "./app.js";
+import { getUserData, showToast, renderSidebar, todayStr } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -103,11 +124,46 @@ function isOverdue(e) {
 }
 
 let _charts = [];
+let _allDocs = [];
 
 async function loadReport() {
   try {
     const snap = await getDocs(collection(db, 'complaints'));
-    const docs = snap.docs.map(d => d.data());
+    _allDocs = snap.docs.map(d => d.data());
+    populateStoreFilter(_allDocs);
+    renderReport();
+  } catch (err) {
+    showToast('報表載入失敗', 'error');
+  }
+}
+
+function populateStoreFilter(docs) {
+  const sel = document.getElementById('filterStore');
+  const current = sel.value;
+  const stores = Array.from(new Set(docs.map(e => e.store).filter(Boolean))).sort();
+  sel.innerHTML = '<option value="">全部門市／客戶</option>' + stores.map(s => `<option value="${s}">${s}</option>`).join('');
+  sel.value = current;
+}
+
+window.applyFilters = () => renderReport();
+
+function getFilteredDocs() {
+  const from = document.getElementById('filterDateFrom').value;
+  const to = document.getElementById('filterDateTo').value;
+  const store = document.getElementById('filterStore').value;
+  return _allDocs.filter(e => {
+    if (from && e.date && e.date < from) return false;
+    if (to && e.date && e.date > to) return false;
+    if (store && e.store !== store) return false;
+    return true;
+  });
+}
+
+let _lastReportData = null;
+
+function renderReport() {
+  try {
+    const docs = getFilteredDocs();
     const total = docs.length;
 
     const doneCount = docs.filter(e => e.status === '已結案').length;
@@ -155,10 +211,50 @@ async function loadReport() {
       months, monthCounts: months.map(m => monthMap[m]),
       closeMonths, closeAvgs
     });
+
+    _lastReportData = {
+      total, doneRate: total ? doneRate : null, avgDays, overdueRate: activeDocs.length ? overdueRate : null,
+      types, typeCounts,
+      storeRows: storeSorted,
+      monthRows: months.map(m => [m, monthMap[m]])
+    };
   } catch (err) {
     showToast('報表載入失敗', 'error');
   }
 }
+
+window.exportCSV = () => {
+  if (!_lastReportData) { showToast('尚無資料可匯出', 'error'); return; }
+  const d = _lastReportData;
+  const lines = [];
+  lines.push('客訴反饋系統 - 數據報表');
+  lines.push('');
+  lines.push('總客訴數,' + d.total);
+  lines.push('已結案比例,' + (d.doneRate !== null ? d.doneRate + '%' : '-'));
+  lines.push('平均結案天數,' + (d.avgDays !== null ? d.avgDays.toFixed(1) : '-'));
+  lines.push('目前逾期比例,' + (d.overdueRate !== null ? d.overdueRate + '%' : '-'));
+  lines.push('');
+  lines.push('客訴類型分布');
+  lines.push('類型,數量');
+  d.types.forEach((t, i) => lines.push(`${t},${d.typeCounts[i]}`));
+  lines.push('');
+  lines.push('門市／客戶排行（Top 10）');
+  lines.push('門市／客戶,數量');
+  d.storeRows.forEach(([s, c]) => lines.push(`${s},${c}`));
+  lines.push('');
+  lines.push('每月客訴趨勢');
+  lines.push('月份,數量');
+  d.monthRows.forEach(([m, c]) => lines.push(`${m},${c}`));
+
+  const csv = '﻿' + lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `數據報表_${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 function renderCharts(d) {
   _charts.forEach(c => c.destroy());

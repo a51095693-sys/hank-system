@@ -183,6 +183,7 @@ window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); wi
 window.showImage = (src) => { document.getElementById('imgLightboxImg').src = src; document.getElementById('imgLightbox').style.display = 'flex'; };
 
 let _isManager = false;
+let _firstLoad = true;
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
@@ -225,6 +226,11 @@ window.loadData = async () => {
     document.getElementById('statProcessing').textContent = counts['處理中'];
     document.getElementById('statDone').textContent = counts['已結案'];
     document.getElementById('statOverdue').textContent = overdueCount;
+
+    if (_firstLoad) {
+      _firstLoad = false;
+      if (overdueCount > 0) showToast(`⚠️ 目前有 ${overdueCount} 筆客訴已逾期未結案，請盡速處理`, 'error');
+    }
 
     // 排序（由新到舊）
     const sorted = allDocs.slice().sort((a, b) => {
