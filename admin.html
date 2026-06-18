@@ -68,14 +68,18 @@
         <span style="color:var(--text3);">～</span>
         <input type="date" class="form-control" id="filterDateTo" style="width:auto;" onchange="loadData()" title="結束日期">
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('filterDateFrom').value='';document.getElementById('filterDateTo').value='';loadData()">✕ 清除日期</button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--danger);cursor:pointer;">
+          <input type="checkbox" id="filterUrgent" onchange="loadData()" style="cursor:pointer;">🚨 只看緊急
+        </label>
         <button class="btn btn-outline btn-sm" onclick="loadData()">🔄 重新整理</button>
         <button class="btn btn-primary btn-sm" onclick="openAddModal()">✚ 新增客訴</button>
+        <button class="btn btn-sm" id="batchCloseBtn" style="display:none;background:#DCFCE7;color:var(--success);" onclick="batchClose()">✔ 批次結案（<span id="batchCount">0</span>）</button>
         <span id="countBadge" style="font-size:12px;color:var(--text3);"></span>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>提交者</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>狀態</th><th>最新訊息</th><th></th></tr></thead>
-          <tbody id="dataTable"><tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th><input type="checkbox" id="selectAllCb" onchange="toggleSelectAll(this.checked)" style="cursor:pointer;"></th><th>日期</th><th>提交者</th><th>門市／客戶</th><th>類型</th><th>品項</th><th>描述</th><th>狀態</th><th>負責人</th><th>最新訊息</th><th></th></tr></thead>
+          <tbody id="dataTable"><tr><td colspan="11" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -113,6 +117,10 @@
       </div>
       <div style="grid-column:1/-1;"><label class="form-label">提交者</label><input type="text" class="form-control" id="nSubmitter" placeholder="例如：門市名稱或代為登錄人員"></div>
       <div style="grid-column:1/-1;"><label class="form-label">問題描述 *</label><textarea class="form-control" id="nDesc" placeholder="請詳細描述客訴內容…"></textarea></div>
+      <div style="grid-column:1/-1;display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="nUrgent" style="width:16px;height:16px;cursor:pointer;">
+        <label class="form-label" for="nUrgent" style="margin:0;cursor:pointer;color:var(--danger);">🚨 標記為緊急</label>
+      </div>
     </div>
     <div class="flex gap-2">
       <button class="btn btn-primary w-full" id="addCBtn" onclick="createComplaint()">📨 送出客訴</button>
@@ -133,6 +141,10 @@
         <option value="處理中">處理中</option>
         <option value="已結案">已結案</option>
       </select>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">指派負責人</label>
+      <select class="form-control" id="mAssignee"><option value="">未指派</option></select>
     </div>
     <div style="margin-bottom:12px;">
       <label class="form-label">對話紀錄</label>
@@ -179,6 +191,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, 'default');
 let _ud, _records = {};
+let _selected = new Set();
 document.getElementById('nStore').innerHTML = STORES.map(s => `<option value="${s}">${s}</option>`).join('');
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
@@ -187,6 +200,15 @@ window.showImage = (src) => { document.getElementById('imgLightboxImg').src = sr
 
 let _isManager = false;
 let _firstLoad = true;
+let _assigneeOptions = '<option value="">未指派</option>';
+
+async function loadAssignees() {
+  try {
+    const snap = await getDocs(collection(db, 'accounts'));
+    const names = snap.docs.map(d => d.data().name).filter(Boolean).sort();
+    _assigneeOptions = '<option value="">未指派</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
+  } catch(e) {}
+}
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
@@ -194,6 +216,7 @@ onAuthStateChanged(auth, async user => {
   if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
   _isManager = _ud.role === 'manager';
   renderSidebar(_ud, 'admin.html', auth);
+  loadAssignees();
   loadData();
 });
 
@@ -212,7 +235,7 @@ function lastMessage(e) {
 
 window.loadData = async () => {
   const tbody = document.getElementById('dataTable');
-  tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" class="text-muted text-center" style="padding:24px;">載入中…</td></tr>';
   try {
     const snap = await getDocs(collection(db, 'complaints'));
     const allDocs = (_isManager && _ud.store && _ud.store !== '總公司')
@@ -237,8 +260,10 @@ window.loadData = async () => {
       if (overdueCount > 0) showToast(`⚠️ 目前有 ${overdueCount} 筆客訴已逾期未結案，請盡速處理`, 'error');
     }
 
-    // 排序（由新到舊）
+    // 排序（緊急優先，再由新到舊）
     const sorted = allDocs.slice().sort((a, b) => {
+      const ua = a.data().urgent ? 1 : 0, ub = b.data().urgent ? 1 : 0;
+      if (ua !== ub) return ub - ua;
       return (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0);
     });
 
@@ -247,19 +272,21 @@ window.loadData = async () => {
     const ft = document.getElementById('filterType').value;
     const fdFrom = document.getElementById('filterDateFrom').value;
     const fdTo = document.getElementById('filterDateTo').value;
+    const fUrgent = document.getElementById('filterUrgent').checked;
     const filtered = sorted.filter(d => {
       const e = d.data();
       if (fs && e.status !== fs) return false;
       if (ft && e.type !== ft) return false;
       if (fdFrom && e.date < fdFrom) return false;
       if (fdTo && e.date > fdTo) return false;
+      if (fUrgent && !e.urgent) return false;
       return true;
     });
 
     _records = {};
     document.getElementById('countBadge').textContent = `共 ${filtered.length} 筆`;
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="text-muted text-center" style="padding:24px;">無記錄</td></tr>';
       return;
     }
 
@@ -274,21 +301,68 @@ window.loadData = async () => {
       const overdueBadge = overdue
         ? (e.overdueReason ? ` <span title="逾期原因：${e.overdueReason}" style="font-size:11px;">📝已說明</span>` : ` <span title="已逾期未結案（超過2天）" style="font-size:11px;color:var(--danger);">⚠️逾期</span>`)
         : '';
-      return `<tr data-search="${search}" style="${e.status==='待處理'?'background:#FFF5F5;':''}">
+      const urgentBadge = e.urgent ? ` <span title="緊急" style="font-size:11px;color:var(--danger);font-weight:700;">🚨緊急</span>` : '';
+      const checked = _selected.has(d.id) ? 'checked' : '';
+      return `<tr data-search="${search}" style="${e.urgent?'background:#FEE2E2;':(e.status==='待處理'?'background:#FFF5F5;':'')}">
+        <td><input type="checkbox" class="rowCb" data-id="${d.id}" ${checked} onchange="toggleSelect('${d.id}',this.checked)" style="cursor:pointer;"></td>
         <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
         <td data-label="提交者"><span class="badge badge-blue">${e.submittedBy||'-'}</span></td>
-        <td data-label="門市／客戶"><strong>${e.store}</strong></td>
+        <td data-label="門市／客戶"><strong>${e.store}</strong>${urgentBadge}</td>
         <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
         <td data-label="品項">${e.item||'-'}</td>
         <td data-label="描述" style="max-width:160px;white-space:normal;">${e.desc}${e.hasMedia?` <span title="含附件">📎${e.mediaCount>1?` ×${e.mediaCount}`:''}</span>`:''}</td>
         <td data-label="狀態"><span class="badge badge-${e.status}">${e.status}</span>${overdueBadge}</td>
+        <td data-label="負責人">${e.assignedTo?`<span class="badge" style="background:#EDE9FE;color:#6D28D9;">${e.assignedTo}</span>`:`<span class="text-muted" style="font-size:12px;">-</span>`}</td>
         <td data-label="最新訊息" style="max-width:200px;">${replyHtml}</td>
         <td><div class="flex gap-2"><button class="btn btn-primary btn-sm" onclick="openModal('${d.id}')">審核</button><button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDelComplaint('${d.id}','${e.store}')">刪除</button></div></td>
       </tr>`;
     }).join('');
+    updateBatchUI();
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
+};
+
+window.toggleSelect = (id, checked) => {
+  if (checked) _selected.add(id); else _selected.delete(id);
+  updateBatchUI();
+};
+
+window.toggleSelectAll = (checked) => {
+  document.querySelectorAll('#dataTable .rowCb').forEach(cb => {
+    cb.checked = checked;
+    if (checked) _selected.add(cb.dataset.id); else _selected.delete(cb.dataset.id);
+  });
+  updateBatchUI();
+};
+
+function updateBatchUI() {
+  const visibleIds = new Set(Array.from(document.querySelectorAll('#dataTable .rowCb')).map(cb => cb.dataset.id));
+  _selected.forEach(id => { if (!visibleIds.has(id)) _selected.delete(id); });
+  document.getElementById('batchCount').textContent = _selected.size;
+  document.getElementById('batchCloseBtn').style.display = _selected.size > 0 ? '' : 'none';
+}
+
+window.batchClose = async () => {
+  if (_selected.size === 0) return;
+  const ids = Array.from(_selected);
+  const btn = document.getElementById('batchCloseBtn');
+  btn.disabled = true;
+  let okCount = 0;
+  for (const id of ids) {
+    const e = _records[id];
+    if (!e || e.status === '已結案') continue;
+    try {
+      await updateDoc(doc(db, 'complaints', id), { status: '已結案', closedAt: serverTimestamp() });
+      logAudit(db, _ud, '更新客訴', id, e.store, `狀態：${e.status} → 已結案（批次結案）`);
+      okCount++;
+    } catch(err) {}
+  }
+  _selected.clear();
+  showToast(`已批次結案 ${okCount} 筆`, 'success');
+  document.getElementById('selectAllCb').checked = false;
+  btn.disabled = false;
+  loadData();
 };
 
 window.filterTable = () => {
@@ -316,6 +390,8 @@ window.openModal = async (id) => {
   const e = _records[id]; if (!e) return;
   document.getElementById('mId').value = id;
   document.getElementById('mStatus').value = e.status;
+  document.getElementById('mAssignee').innerHTML = _assigneeOptions;
+  document.getElementById('mAssignee').value = e.assignedTo || '';
   document.getElementById('mReply').value = '';
   document.getElementById('threadBox').innerHTML = renderThread(e);
   const overdue = isOverdue(e);
@@ -340,6 +416,7 @@ window.openModal = async (id) => {
     }
   }
   document.getElementById('modalInfo').innerHTML = `
+    ${e.urgent?`<div style="color:var(--danger);font-weight:700;margin-bottom:4px;">🚨 緊急客訴</div>`:''}
     <div><strong>日期：</strong>${e.date}　<strong>提交者：</strong>${e.submittedBy||'-'}</div>
     <div><strong>門市／客戶：</strong>${e.store}　<strong>類型：</strong>${e.type}</div>
     ${e.item?`<div><strong>品項：</strong>${e.item}</div>`:''}
@@ -417,6 +494,7 @@ window.confirmDeleteComplaint = async () => {
 window.openAddModal = () => {
   ['nItem','nSubmitter','nDesc'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('nType').value = '品質問題';
+  document.getElementById('nUrgent').checked = false;
   document.getElementById('nDate').value = todayStr();
   if (_ud.store) document.getElementById('nStore').value = _ud.store;
   document.getElementById('addModal').classList.add('open');
@@ -436,6 +514,7 @@ window.createComplaint = async () => {
       type: document.getElementById('nType').value,
       item: document.getElementById('nItem').value.trim(),
       desc,
+      urgent: document.getElementById('nUrgent').checked,
       status: '待處理', messages: [],
       submittedBy: document.getElementById('nSubmitter').value.trim() || _ud.name,
       submittedUid: auth.currentUser.uid,
@@ -455,10 +534,11 @@ window.createComplaint = async () => {
 window.saveReply = async () => {
   const id = document.getElementById('mId').value;
   const status = document.getElementById('mStatus').value;
+  const assignedTo = document.getElementById('mAssignee').value;
   const text = document.getElementById('mReply').value.trim();
   try {
     const e = _records[id];
-    const updates = { status };
+    const updates = { status, assignedTo };
     if (status === '已結案') updates.closedAt = serverTimestamp();
     if (text) {
       const msgs = e.messages && e.messages.length ? e.messages.slice() : (e.reply ? [{ from: 'admin', name: e.repliedBy || '管理員', text: e.reply }] : []);
@@ -468,6 +548,7 @@ window.saveReply = async () => {
     await updateDoc(doc(db, 'complaints', id), updates);
     const logParts = [];
     if (status !== e.status) logParts.push(`狀態：${e.status} → ${status}`);
+    if (assignedTo !== (e.assignedTo || '')) logParts.push(`負責人：${e.assignedTo || '未指派'} → ${assignedTo || '未指派'}`);
     if (text) logParts.push(`新增回覆：${text.slice(0, 50)}${text.length > 50 ? '…' : ''}`);
     if (logParts.length) logAudit(db, _ud, '更新客訴', id, e.store, logParts.join('；'));
     showToast('已儲存', 'success');

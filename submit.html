@@ -53,7 +53,15 @@
             <option value="魚丸">魚丸</option>
           </select>
         </div>
-        <div style="grid-column:1/-1;"><label class="form-label">問題描述 *</label><textarea class="form-control" id="fDesc" placeholder="請詳細描述客訴內容…"></textarea></div>
+        <div style="grid-column:1/-1;display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="fUrgent" style="width:16px;height:16px;cursor:pointer;">
+          <label class="form-label" for="fUrgent" style="margin:0;cursor:pointer;color:var(--danger);">🚨 標記為緊急</label>
+        </div>
+        <div style="grid-column:1/-1;">
+          <label class="form-label">問題描述 *</label>
+          <textarea class="form-control" id="fDesc" placeholder="請詳細描述客訴內容…"></textarea>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;" id="quickPhrases"></div>
+        </div>
         <div style="grid-column:1/-1;">
           <label class="form-label">附加照片</label>
           <input type="file" class="form-control" id="fMedia" accept="image/jpeg,image/png,image/webp,image/gif" multiple onchange="previewMedia()">
@@ -83,6 +91,16 @@ window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle(
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
 
 document.getElementById('fDate').value = todayStr();
+
+const QUICK_PHRASES = ['未熟','異物','口味不佳','包裝破損','數量不足','配送延遲'];
+document.getElementById('quickPhrases').innerHTML = QUICK_PHRASES.map(p =>
+  `<button type="button" class="btn btn-outline btn-sm" onclick="insertPhrase('${p}')">${p}</button>`
+).join('');
+window.insertPhrase = (text) => {
+  const ta = document.getElementById('fDesc');
+  ta.value = ta.value ? `${ta.value}、${text}` : text;
+  ta.focus();
+};
 
 function lastMessage(e) {
   if (e.messages && e.messages.length) return e.messages[e.messages.length - 1];
@@ -198,6 +216,7 @@ window.submitComplaint = async () => {
       type: document.getElementById('fType').value,
       item: document.getElementById('fItem').value.trim(),
       desc,
+      urgent: document.getElementById('fUrgent').checked,
       hasMedia: mediaUrls.length > 0,
       mediaCount: mediaUrls.length,
       status: '待處理', messages: [],
@@ -210,6 +229,7 @@ window.submitComplaint = async () => {
     showToast('客訴已送出', 'success');
     ['fItem','fDesc'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('fType').value = '品質問題';
+    document.getElementById('fUrgent').checked = false;
     document.getElementById('fDate').value = todayStr();
     document.getElementById('fMedia').value = '';
     _selectedFiles = [];

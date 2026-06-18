@@ -68,15 +68,16 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, 'default');
 let _allDocs = [];
+let _ud;
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
-  const ud = await getUserData(db, user);
-  if (ud.role !== 'admin') { window.location.href = ud.role === 'manager' ? 'admin.html' : 'submit.html'; return; }
-  renderSidebar(ud, 'auditlog.html', auth);
+  _ud = await getUserData(db, user);
+  if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
+  renderSidebar(_ud, 'auditlog.html', auth);
   loadData();
 });
 
@@ -94,7 +95,10 @@ window.loadData = async () => {
     const snap = await getDocs(collection(db, 'auditLog'));
     const fdFrom = document.getElementById('filterDateFrom').value;
     const fdTo = document.getElementById('filterDateTo').value;
-    let docs = snap.docs.filter(d => {
+    const scoped = (_ud.role === 'manager' && _ud.store && _ud.store !== '總公司')
+      ? snap.docs.filter(d => d.data().store === _ud.store)
+      : snap.docs;
+    let docs = scoped.filter(d => {
       const e = d.data();
       if (!e.at?.seconds) return false;
       if (fdFrom || fdTo) {
