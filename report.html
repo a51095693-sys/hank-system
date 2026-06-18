@@ -111,7 +111,7 @@ window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); wi
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
   const ud = await getUserData(db, user);
-  if (ud.role !== 'admin') { window.location.href = ud.role === 'manager' ? 'admin.html' : 'submit.html'; return; }
+  if (ud.role !== 'admin' && ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
   renderSidebar(ud, 'report.html', auth);
   loadReport();
 });
