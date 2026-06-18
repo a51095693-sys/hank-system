@@ -96,10 +96,26 @@ const auth = getAuth(app);
 const db = getFirestore(app, 'default');
 let _ud, _records = {};
 let _tags = [];
+let _dupIds = new Set();
 
 function tagColor(name) {
   const t = _tags.find(t => t.name === name);
   return t ? t.color : '#64748B';
+}
+
+const DUPLICATE_WINDOW_DAYS = 7;
+function findDuplicates(docs) {
+  const dupIds = new Set();
+  const list = docs.map(d => ({ id: d.id, store: d.data().store, item: d.data().item, date: d.data().date }))
+    .filter(x => x.item);
+  for (let i = 0; i < list.length; i++) {
+    for (let j = 0; j < list.length; j++) {
+      if (i === j || list[i].store !== list[j].store || list[i].item !== list[j].item) continue;
+      const diffDays = Math.abs((new Date(list[i].date) - new Date(list[j].date)) / 86400000);
+      if (diffDays <= DUPLICATE_WINDOW_DAYS) { dupIds.add(list[i].id); break; }
+    }
+  }
+  return dupIds;
 }
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
@@ -140,6 +156,7 @@ window.loadData = async () => {
       ? snap.docs.filter(d => d.data().store === _ud.store)
       : snap.docs;
     const overdueDocs = scopedDocs.filter(d => isOverdue(d.data()));
+    _dupIds = findDuplicates(scopedDocs);
 
     const sorted = overdueDocs.slice().sort((a, b) => {
       const ua = a.data().urgent ? 1 : 0, ub = b.data().urgent ? 1 : 0;
@@ -161,10 +178,11 @@ window.loadData = async () => {
         ? `<span style="font-size:12px;">📝 ${e.overdueReason}<div style="color:var(--text3);font-size:11px;margin-top:2px;">— ${e.overdueReasonBy||''}</div></span>`
         : `<span style="font-size:12px;color:var(--danger);">尚未說明</span>`;
       const urgentBadge = e.urgent ? ` <span title="緊急" style="font-size:11px;color:var(--danger);font-weight:700;">🚨緊急</span>` : '';
+      const dupBadge = _dupIds.has(d.id) ? ` <span title="${DUPLICATE_WINDOW_DAYS} 天內同門市同品項已有其他客訴" style="font-size:11px;color:#B45309;font-weight:700;">🔁重複問題</span>` : '';
       return `<tr data-search="${search}" style="${e.urgent?'background:#FEE2E2;':''}">
         <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
         <td data-label="提交者"><span class="badge badge-blue">${e.submittedBy||'-'}</span></td>
-        <td data-label="門市／客戶"><strong>${e.store}</strong>${urgentBadge}</td>
+        <td data-label="門市／客戶"><strong>${e.store}</strong>${urgentBadge}${dupBadge}</td>
         <td data-label="類型" style="white-space:nowrap;">${e.type}</td>
         <td data-label="品項">${e.item||'-'}</td>
         <td data-label="標籤">${e.tag?`<span class="badge" style="background:${tagColor(e.tag)}1A;color:${tagColor(e.tag)};">${e.tag}</span>`:`<span class="text-muted" style="font-size:12px;">-</span>`}</td>
@@ -228,6 +246,7 @@ window.openModal = async (id) => {
   }
   document.getElementById('modalInfo').innerHTML = `
     ${e.urgent?`<div style="color:var(--danger);font-weight:700;margin-bottom:4px;">🚨 緊急客訴</div>`:''}
+    ${_dupIds.has(id)?`<div style="color:#B45309;font-weight:700;margin-bottom:4px;">🔁 ${DUPLICATE_WINDOW_DAYS} 天內同門市同品項已有其他客訴，可能是重複問題</div>`:''}
     <div><strong>日期：</strong>${e.date}　<strong>提交者：</strong>${e.submittedBy||'-'}</div>
     <div><strong>門市／客戶：</strong>${e.store}　<strong>類型：</strong>${e.type}</div>
     ${e.item?`<div><strong>品項：</strong>${e.item}</div>`:''}
