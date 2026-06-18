@@ -29,7 +29,7 @@
     <div class="page-title">📋 所有客訴</div>
 
     <!-- 統計卡片 -->
-    <div class="stat-grid">
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);">
       <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
         <div style="font-size:32px;font-weight:700;color:var(--danger);" id="statPending">-</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px;">待處理</div>
@@ -41,6 +41,10 @@
       <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
         <div style="font-size:32px;font-weight:700;color:var(--success);" id="statDone">-</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px;">已結案</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
+        <div style="font-size:32px;font-weight:700;color:#B45309;" id="statOverdue">-</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">逾期未結案</div>
       </div>
     </div>
 
@@ -189,7 +193,7 @@ onAuthStateChanged(auth, async user => {
   loadData();
 });
 
-const OVERDUE_MS = 7 * 24 * 60 * 60 * 1000;
+const OVERDUE_MS = 2 * 24 * 60 * 60 * 1000;
 function isOverdue(e) {
   if (e.status === '已結案') return false;
   if (!e.createdAt?.seconds) return false;
@@ -211,10 +215,16 @@ window.loadData = async () => {
 
     // 統計（全部資料，不受篩選影響）
     const counts = { '待處理': 0, '處理中': 0, '已結案': 0 };
-    allDocs.forEach(d => { const s = d.data().status; if (counts[s] !== undefined) counts[s]++; });
+    let overdueCount = 0;
+    allDocs.forEach(d => {
+      const e = d.data();
+      if (counts[e.status] !== undefined) counts[e.status]++;
+      if (isOverdue(e)) overdueCount++;
+    });
     document.getElementById('statPending').textContent = counts['待處理'];
     document.getElementById('statProcessing').textContent = counts['處理中'];
     document.getElementById('statDone').textContent = counts['已結案'];
+    document.getElementById('statOverdue').textContent = overdueCount;
 
     // 排序（由新到舊）
     const sorted = allDocs.slice().sort((a, b) => {
@@ -251,7 +261,7 @@ window.loadData = async () => {
         : `<span style="color:var(--text3);font-size:12px;">-</span>`;
       const overdue = isOverdue(e);
       const overdueBadge = overdue
-        ? (e.overdueReason ? ` <span title="逾期原因：${e.overdueReason}" style="font-size:11px;">📝已說明</span>` : ` <span title="已逾期一週未結案" style="font-size:11px;color:var(--danger);">⚠️逾期</span>`)
+        ? (e.overdueReason ? ` <span title="逾期原因：${e.overdueReason}" style="font-size:11px;">📝已說明</span>` : ` <span title="已逾期未結案（超過2天）" style="font-size:11px;color:var(--danger);">⚠️逾期</span>`)
         : '';
       return `<tr data-search="${search}" style="${e.status==='待處理'?'background:#FFF5F5;':''}">
         <td data-label="日期" style="white-space:nowrap;">${e.date}</td>
@@ -302,18 +312,18 @@ window.openModal = async (id) => {
   if (overdue) {
     if (e.overdueReason) {
       overdueHtml = `<div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;">
-        <strong style="color:#B45309;">⚠️ 已逾期一週未結案</strong>
+        <strong style="color:#B45309;">⚠️ 已逾期未結案（超過2天）</strong>
         <div style="margin-top:4px;font-size:13px;">原因：${e.overdueReason}（${e.overdueReasonBy||''}）</div>
       </div>`;
     } else if (_isManager) {
       overdueHtml = `<div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;">
-        <strong style="color:#B45309;">⚠️ 已逾期一週未結案，請說明原因</strong>
+        <strong style="color:#B45309;">⚠️ 已逾期未結案（超過2天），請說明原因</strong>
         <textarea class="form-control" id="mOverdueReason" placeholder="請說明逾期原因…" style="min-height:60px;margin-top:8px;"></textarea>
         <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="saveOverdueReason('${id}')">送出原因</button>
       </div>`;
     } else {
       overdueHtml = `<div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;">
-        <strong style="color:#B45309;">⚠️ 已逾期一週未結案</strong>
+        <strong style="color:#B45309;">⚠️ 已逾期未結案（超過2天）</strong>
         <div style="margin-top:4px;font-size:12px;color:var(--text3);">尚未由廠長／副廠長說明逾期原因</div>
       </div>`;
     }
