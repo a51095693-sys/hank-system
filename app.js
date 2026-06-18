@@ -1,7 +1,7 @@
 import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { doc, getDoc, collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福'];
+export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福','新莊'];
 
 export async function loadTags(db) {
   try {
