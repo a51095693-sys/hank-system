@@ -52,7 +52,10 @@
     </div>
     <div style="margin-bottom:12px;">
       <label class="form-label">密碼 *</label>
-      <input type="password" class="form-control" id="aPwd" placeholder="生日6位數字" maxlength="6" inputmode="numeric">
+      <div style="position:relative;">
+        <input type="password" class="form-control" id="aPwd" placeholder="生日6位數字" maxlength="6" inputmode="numeric" style="padding-right:40px;">
+        <button type="button" onclick="togglePwd('aPwd', this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;">👁️</button>
+      </div>
     </div>
     <div style="margin-bottom:12px;">
       <label class="form-label">職稱</label>
@@ -98,10 +101,21 @@
 <div class="modal-bg" id="editModal">
   <div class="modal">
     <div class="modal-title">✏️ 編輯帳號</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">帳號：<strong id="eIdNo"></strong></div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">帳號（登入用）</label>
+      <input type="text" class="form-control" id="eIdNo" disabled style="background:var(--surface2);color:var(--text2);">
+    </div>
     <div style="margin-bottom:12px;">
       <label class="form-label">姓名 *</label>
       <input type="text" class="form-control" id="eName" placeholder="員工姓名">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">密碼</label>
+      <div style="position:relative;">
+        <input type="password" class="form-control" id="ePwd" value="••••••" disabled style="padding-right:40px;background:var(--surface2);color:var(--text2);">
+        <button type="button" onclick="togglePwd('ePwd', this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;">👁️</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">系統未儲存密碼明文，無法顯示或修改</div>
     </div>
     <div style="margin-bottom:12px;">
       <label class="form-label">職稱</label>
@@ -170,6 +184,12 @@ const secondApp = initializeApp(firebaseConfig, 'secondary');
 const secondAuth = getAuth(secondApp);
 
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.togglePwd = (id, btn) => {
+  const input = document.getElementById(id);
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  btn.textContent = showing ? '👁️' : '🙈';
+};
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
 
 onAuthStateChanged(auth, async user => {
@@ -266,7 +286,7 @@ window.openEdit = (id) => {
   const e = _accounts[id];
   if (!e) return;
   document.getElementById('eId').value = id;
-  document.getElementById('eIdNo').textContent = e.idNo;
+  document.getElementById('eIdNo').value = e.idNo;
   document.getElementById('eName').value = e.name;
   document.getElementById('eRole').value = e.role;
   document.getElementById('eStore').value = e.store || '鑫耀鑫';
