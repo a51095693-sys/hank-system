@@ -52,7 +52,7 @@
     </div>
     <div style="margin-bottom:12px;">
       <label class="form-label">密碼 *</label>
-      <input type="password" class="form-control" id="aPwd" placeholder="生日6位數字">
+      <input type="password" class="form-control" id="aPwd" placeholder="生日6位數字" maxlength="6" inputmode="numeric">
     </div>
     <div style="margin-bottom:16px;">
       <label class="form-label">角色</label>
@@ -191,7 +191,7 @@ window.createAccount = async () => {
   const pwd = document.getElementById('aPwd').value;
   const role = document.getElementById('aRole').value;
   if (!idNo || !name || !pwd) { showToast('請填寫所有欄位', 'error'); return; }
-  if (pwd.length < 6) { showToast('密碼至少 6 個字元', 'error'); return; }
+  if (!/^\d{6}$/.test(pwd)) { showToast('密碼須為生日6位數字', 'error'); return; }
   const btn = document.getElementById('addBtn');
   btn.disabled = true; btn.textContent = '建立中…';
   try {
