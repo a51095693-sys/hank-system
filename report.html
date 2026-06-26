@@ -300,13 +300,13 @@ function renderCharts(d) {
 
   _charts.push(new Chart(document.getElementById('chartType'), {
     type: 'doughnut',
-    data: { labels: d.types, datasets: [{ data: d.typeCounts, backgroundColor: ['#2563EB', '#3B82F6', '#A855F7', '#64748B'] }] },
+    data: { labels: d.types, datasets: [{ data: d.typeCounts, backgroundColor: ['#F97316', '#3B82F6', '#A855F7', '#64748B'] }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
   }));
 
   _charts.push(new Chart(document.getElementById('chartStore'), {
     type: 'bar',
-    data: { labels: d.storeLabels, datasets: [{ label: '客訴數', data: d.storeCounts, backgroundColor: '#2563EB' }] },
+    data: { labels: d.storeLabels, datasets: [{ label: '客訴數', data: d.storeCounts, backgroundColor: '#F97316' }] },
     options: {
       responsive: true, maintainAspectRatio: false, indexAxis: 'y',
       plugins: { legend: { display: false } },
@@ -336,7 +336,7 @@ function renderCharts(d) {
 
   _charts.push(new Chart(document.getElementById('chartTrend'), {
     type: 'line',
-    data: { labels: d.months, datasets: [{ label: '客訴數', data: d.monthCounts, borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,.15)', fill: true, tension: .3 }] },
+    data: { labels: d.months, datasets: [{ label: '客訴數', data: d.monthCounts, borderColor: '#F97316', backgroundColor: 'rgba(249,115,22,.15)', fill: true, tension: .3 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { precision: 0 } } } }
   }));
 
