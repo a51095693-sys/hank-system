@@ -51,28 +51,28 @@
     <div class="card">
       <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:12px;">
         <input type="text" class="form-control mob-tool-search" id="searchInput" placeholder="🔍 搜尋門市、描述…" style="width:auto;min-width:160px;" oninput="filterTable()">
-        <select class="form-control" id="filterStatus" style="width:auto;" onchange="loadData()">
+        <select class="form-control" id="filterStatus" style="width:auto;" onchange="filterData()">
           <option value="">全部狀態</option>
           <option value="待處理">待處理</option>
           <option value="處理中">處理中</option>
           <option value="已結案">已結案</option>
         </select>
-        <select class="form-control" id="filterType" style="width:auto;" onchange="loadData()">
+        <select class="form-control" id="filterType" style="width:auto;" onchange="filterData()">
           <option value="">全部類型</option>
           <option value="品質問題">品質問題</option>
           <option value="配送問題">配送問題</option>
           <option value="數量問題">數量問題</option>
           <option value="其他">其他</option>
         </select>
-        <select class="form-control" id="filterTag" style="width:auto;" onchange="loadData()">
+        <select class="form-control" id="filterTag" style="width:auto;" onchange="filterData()">
           <option value="">全部標籤</option>
         </select>
-        <input type="date" class="form-control" id="filterDateFrom" style="width:auto;" onchange="loadData()" title="起始日期">
+        <input type="date" class="form-control" id="filterDateFrom" style="width:auto;" onchange="filterData()" title="起始日期">
         <span style="color:var(--text3);">～</span>
-        <input type="date" class="form-control" id="filterDateTo" style="width:auto;" onchange="loadData()" title="結束日期">
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('filterDateFrom').value='';document.getElementById('filterDateTo').value='';loadData()">✕ 清除日期</button>
+        <input type="date" class="form-control" id="filterDateTo" style="width:auto;" onchange="filterData()" title="結束日期">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('filterDateFrom').value='';document.getElementById('filterDateTo').value='';filterData()">✕ 清除日期</button>
         <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--danger);cursor:pointer;">
-          <input type="checkbox" id="filterUrgent" onchange="loadData()" style="cursor:pointer;">🚨 只看緊急
+          <input type="checkbox" id="filterUrgent" onchange="filterData()" style="cursor:pointer;">🚨 只看緊急
         </label>
         <button class="btn btn-outline btn-sm" onclick="loadData()">🔄 重新整理</button>
         <button class="btn btn-primary btn-sm" onclick="openAddModal()">✚ 新增客訴</button>
@@ -191,7 +191,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, logAudit, STORES, loadTags } from "./app.js";
+import { getUserData, showToast, renderSidebar, todayStr, logAudit, STORES, loadTags, sendTG } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -208,6 +208,7 @@ window.showImage = (src) => { document.getElementById('imgLightboxImg').src = sr
 
 let _isManager = false;
 let _firstLoad = true;
+let _allDocs = [];
 
 async function loadTagsData() {
   _tags = await loadTags(db);
@@ -286,7 +287,14 @@ window.loadData = async () => {
 
     if (_firstLoad) {
       _firstLoad = false;
-      if (overdueCount > 0) showToast(`⚠️ 目前有 ${overdueCount} 筆客訴已逾期未結案，請盡速處理`, 'error');
+      if (overdueCount > 0) {
+        showToast(`⚠️ 目前有 ${overdueCount} 筆客訴已逾期未結案，請盡速處理`, 'error');
+        const todayKey = new Date().toISOString().slice(0, 10);
+        if (localStorage.getItem('tg_overdue_date') !== todayKey) {
+          sendTG(`⚠️ 逾期未結案提醒\n目前有 ${overdueCount} 筆客訴已逾期超過 2 天，請盡速處理`);
+          localStorage.setItem('tg_overdue_date', todayKey);
+        }
+      }
     }
 
     // 排序（緊急優先，再由新到舊）
@@ -555,6 +563,9 @@ window.createComplaint = async () => {
       createdAt: serverTimestamp()
     });
     logAudit(db, _ud, '新增客訴', ref.id, store, desc.slice(0, 50) + (desc.length > 50 ? '…' : ''));
+    const urgent = document.getElementById('nUrgent').checked;
+    const type = document.getElementById('nType').value;
+    sendTG(`${urgent ? '🚨 緊急客訴！' : '📨 新增客訴'}\n門市：${store}\n類型：${type}\n描述：${desc.slice(0, 60)}${desc.length > 60 ? '…' : ''}`);
     showToast('客訴已新增', 'success');
     closeAddModal();
     loadData();

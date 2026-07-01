@@ -27,6 +27,18 @@ export async function logAudit(db, ud, action, complaintId, store, detail) {
   } catch (e) {}
 }
 
+export async function sendTG(text) {
+  const token = '8846849157:AAG6-60xk93vqWY3dzn5whFX7K13Uvs9wus';
+  const chatId = '881202491';
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text })
+    });
+  } catch(e) {}
+}
+
 export function showToast(msg, type = '') {
   const t = document.getElementById('toast');
   if (!t) return;
