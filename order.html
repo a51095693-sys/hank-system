@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2B1D14">
+<meta name="apple-mobile-web-app-title" content="央廚盤點">
 <title>央廚盤點 - 叫貨計算</title>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
@@ -10,22 +15,22 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css?v=20261009a">
+<link rel="stylesheet" href="style.css?v=20261009b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-.od{--ink:#17201B;--mute:#56605A;--line:#E1E4DF;--bg:#F3F4F1;--green:#1E6B47;--green2:#3FBF7F;--warn:#8A3D08;--warnbg:#FDF1E6;
+.od{--ink:#2B1D14;--mute:#6B5A4A;--line:#EEE3D0;--bg:#FBF6EC;--green:#C24A16;--green2:#F7B500;--warn:#8A3D08;--warnbg:#FDF1E6;
   max-width:1120px;color:var(--ink)}
 .od-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:4px 4px 16px}
 .od-top h1{font-size:30px;font-weight:900;letter-spacing:1px;line-height:1.2}
 .od-top .sub{font-size:14px;color:var(--mute)}
 .od-steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.od-steps span{font-size:13px;font-weight:700;color:var(--green);background:#E3F2EA;border-radius:999px;padding:4px 10px}
+.od-steps span{font-size:13px;font-weight:700;color:var(--green);background:#FFF0D1;border-radius:999px;padding:4px 10px}
 .step{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-size:13px;font-weight:900;margin-right:8px;vertical-align:2px}
-.od-res .step{background:var(--green2);color:#0E2A1C}
+.od-res .step{background:var(--green2);color:#3A2306}
 .od-jump{display:none;font-size:14px;font-weight:700;color:var(--green);margin:-4px 0 10px}
 @media (max-width:999px){.od-jump{display:inline-block}}
-.od-sum{font-size:14px;color:#fff;background:rgba(63,191,127,.15);border-radius:10px;padding:10px 12px;line-height:1.6}
+.od-sum{font-size:14px;color:#fff;background:rgba(247,181,0,.15);border-radius:10px;padding:10px 12px;line-height:1.6}
 .od-sum b{color:#F5C04A}
 .od-date{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--mute)}
 .od-date input{width:auto;height:44px;font-size:16px;font-weight:700;background:#fff}
@@ -39,35 +44,35 @@
 .od-row .nm{flex:1;min-width:0;font-size:16px;font-weight:700}
 .od-row .stk{font-size:12px;color:var(--mute);font-weight:400;margin-top:2px}
 .od-in{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.od-in input{width:76px;height:44px;text-align:center;font-size:18px;font-weight:800;border:1.5px solid #C9CFC9;border-radius:10px;font-family:inherit;background:#fff;color:var(--ink);-moz-appearance:textfield}
+.od-in input{width:76px;height:44px;text-align:center;font-size:18px;font-weight:800;border:1.5px solid #E0D3BF;border-radius:10px;font-family:inherit;background:#fff;color:var(--ink);-moz-appearance:textfield}
 .od-in input.sm{width:58px}
 .od-in input::-webkit-outer-spin-button,.od-in input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.od-in input::placeholder{color:#C9CFC9;font-weight:500}
-.od-in input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(30,107,71,.15)}
+.od-in input::placeholder{color:#E0D3BF;font-weight:500}
+.od-in input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(194,74,22,.15)}
 .od-in .u{font-size:13px;color:var(--mute);min-width:28px}
 .od-save{margin-top:12px;width:100%;height:52px;border-radius:12px;border:none;background:var(--green);color:#fff;font-family:inherit;font-size:17px;font-weight:900;cursor:pointer}
 .od-save:disabled{opacity:.6;cursor:not-allowed}
 .od-res{background:var(--ink);color:#fff;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
 .od-res h2{font-size:17px;font-weight:900;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.od-res h2 small{font-size:12px;font-weight:500;color:#9AA59F}
+.od-res h2 small{font-size:12px;font-weight:500;color:#B3A28C}
 .od-res table{width:100%;border-collapse:collapse;font-size:15px}
-.od-res th{background:none;border:none;padding:4px 0 6px 10px;font-size:12px;font-weight:500;color:#9AA59F;text-align:right;white-space:nowrap}
-.od-res td{border:none;border-top:1px solid rgba(255,255,255,.1);padding:8px 0 8px 10px;text-align:right;color:#C9D2CC;white-space:nowrap}
+.od-res th{background:none;border:none;padding:4px 0 6px 10px;font-size:12px;font-weight:500;color:#B3A28C;text-align:right;white-space:nowrap}
+.od-res td{border:none;border-top:1px solid rgba(255,255,255,.1);padding:8px 0 8px 10px;text-align:right;color:#E9DCC8;white-space:nowrap}
 .od-res th:first-child,.od-res td:first-child{text-align:left;padding-left:0}
 .od-res td:first-child{color:#fff;font-weight:700;white-space:normal}
 .od-res tr:hover td{background:none}
 .od-res b{color:#F5C04A;font-weight:900}
-.od-res .od-sup{font-size:14px;font-weight:800;color:#BFE8D0;margin-top:2px}
-.od-res .none{font-size:14px;color:#9AA59F;padding:4px 0}
+.od-res .od-sup{font-size:14px;font-weight:800;color:#FFD98A;margin-top:2px}
+.od-res .none{font-size:14px;color:#B3A28C;padding:4px 0}
 .od-res .warn{font-size:11px;color:#F5C04A;font-weight:500;display:block}
-.od-res .uses{font-size:12px;color:#BFE8D0;font-weight:500;display:block;white-space:normal;margin-top:2px}
-.od-copy{height:48px;border-radius:12px;border:none;background:var(--green2);color:#0E2A1C;font-family:inherit;font-size:16px;font-weight:900;cursor:pointer;width:100%}
+.od-res .uses{font-size:12px;color:#FFD98A;font-weight:500;display:block;white-space:normal;margin-top:2px}
+.od-copy{height:48px;border-radius:12px;border:none;background:var(--green2);color:#3A2306;font-family:inherit;font-size:16px;font-weight:900;cursor:pointer;width:100%}
 .od-copy.ghost{background:rgba(255,255,255,.1);color:#fff}
-.od-note{font-size:12px;color:#9AA59F;line-height:1.7}
+.od-note{font-size:12px;color:#B3A28C;line-height:1.7}
 .od-box{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px}
 .od-box .od-sup{margin:0;font-size:16px}
 .od-box.quiet{padding:10px 12px;opacity:.85}
-.od-later{font-size:13px;color:#9AA59F;line-height:1.9;border-top:1px dashed rgba(255,255,255,.15);padding-top:10px}
+.od-later{font-size:13px;color:#B3A28C;line-height:1.9;border-top:1px dashed rgba(255,255,255,.15);padding-top:10px}
 @media(max-width:768px){.od-top h1{font-size:26px}}
 </style>
 </head>
@@ -80,7 +85,7 @@
 <div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="sb-brand"><h2>📦 央廚盤點</h2><p>庫存管理</p></div>
+    <div class="sb-brand"><h2><img src="icon.svg" alt="" class="sb-logo">央廚盤點</h2><p>庫存管理</p></div>
     <nav class="sb-nav" id="sb-nav"></nav>
     <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
   </aside>
@@ -113,7 +118,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261009a";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261009b";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -389,12 +394,12 @@ function todayPlan() {
 
 function supCard(t, k) {
   const head = `<div class="od-sup">${escHtml(t.sup)}</div>`;
-  const note = t.cfg.note ? `<span class="warn" style="color:#C9D2CC;">📝 ${escHtml(t.cfg.note)}</span>` : '';
+  const note = t.cfg.note ? `<span class="warn" style="color:#E9DCC8;">📝 ${escHtml(t.cfg.note)}</span>` : '';
   const span = `${wk(t.arrive)}到貨${t.n > 1 ? `，下一趟要到 ${wk(addDays(t.arrive, t.n))}，所以叫 ${t.n} 天的量` : ''}`;
   const preTip = t.pre.length ? `；到貨前 ${t.pre.length} 天的出貨已先扣掉` : '';
   const estTip = t.est ? `<span class="warn">有幾天的店面叫貨量還沒輸入，先用最近一天的量估</span>` : '';
   if (t.none) return `<div class="od-box">${head}<span class="warn">${span}</span><span class="warn">請先在左邊輸入店面叫貨量</span></div>`;
-  if (!t.rows.length) return `<div class="od-box quiet">${head}<span class="warn" style="color:#9AA59F;">${span}；庫存夠，今天不用叫</span>${estTip}</div>`;
+  if (!t.rows.length) return `<div class="od-box quiet">${head}<span class="warn" style="color:#B3A28C;">${span}；庫存夠，今天不用叫</span>${estTip}</div>`;
   const rows = t.rows.map(b => `<tr>
     <td>${escHtml(b.it.name)}${b.minUp ? `<span class="warn">最低叫貨量 ${escHtml(qtyText(b.it, b.order))}</span>` : ''}${b.alone ? '<span class="warn">⚠️ 不能單獨叫</span>' : ''}</td>
     <td>${escHtml(qtyText(b.it, b.need))}</td>
@@ -402,7 +407,7 @@ function supCard(t, k) {
     <td>${b.it.safety > 0 ? escHtml(qtyText(b.it, b.it.safety)) : '-'}</td>
     <td><b>${escHtml(qtyText(b.it, b.order))}</b></td>
   </tr>`).join('');
-  return `<div class="od-box">${head}<span class="warn" style="color:#BFE8D0;">${span}${preTip}</span>${estTip}${note}${t.rows.filter(b => b.alone).map(b => `<span class="warn">⚠️ ${escHtml(b.it.name)}${escHtml(b.alone)}</span>`).join('')}
+  return `<div class="od-box">${head}<span class="warn" style="color:#FFD98A;">${span}${preTip}</span>${estTip}${note}${t.rows.filter(b => b.alone).map(b => `<span class="warn">⚠️ ${escHtml(b.it.name)}${escHtml(b.alone)}</span>`).join('')}
     <table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${rows}</tbody></table>
     <button class="od-copy" onclick="copyBuy(${k})">複製叫貨單</button></div>`;
 }
@@ -425,7 +430,7 @@ function renderResult() {
   const call = now.filter(t => !t.none && t.rows.length);
   const empty = now.length && now.every(t => t.none);
   const sum = empty
-    ? `<div class="od-sum">還沒輸入店面要的量。在左邊輸入 <b>${md(addDays(TODAY, 1))}</b> 的量，這裡就會算出每家要叫多少。<br><span style="color:#9AA59F;">今天要叫的廠商：${now.map(t => escHtml(t.sup)).join('、')}</span></div>`
+    ? `<div class="od-sum">還沒輸入店面要的量。在左邊輸入 <b>${md(addDays(TODAY, 1))}</b> 的量，這裡就會算出每家要叫多少。<br><span style="color:#B3A28C;">今天要叫的廠商：${now.map(t => escHtml(t.sup)).join('、')}</span></div>`
     : call.length ? `<div class="od-sum">今天要打給 <b>${call.length} 家</b>：${call.map(t => escHtml(t.sup)).join('、')}</div>`
     : now.length ? '<div class="od-sum">庫存都夠，今天不用叫貨 👍</div>' : '';
   document.getElementById('odResult').innerHTML = `
