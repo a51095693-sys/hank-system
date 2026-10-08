@@ -62,6 +62,8 @@ export function qtyText(i, q) {
   if (i.per) {
     const neg = q < 0;
     const { b, p } = splitBox(Math.abs(q), i.per);
+    // 不滿一個大單位時只顯示小單位（「4 包」而不是「0 箱 4 包」）
+    if (!b && p) return `${neg ? '−' : ''}${fmtQty(p)} ${i.sub}`;
     return `${neg ? '−' : ''}${b} ${i.unit}${p ? ` ${fmtQty(p)} ${i.sub}` : ''}`;
   }
   return `${q < 0 ? '−' : ''}${fmtQty(Math.abs(q))} ${i.unit}`;
