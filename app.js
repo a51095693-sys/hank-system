@@ -27,6 +27,19 @@ export async function loadStockItems(db) {
     .sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
 }
 
+// 廠商名單：suppliers 集合裡建立的廠商，加上品項上已填寫的廠商名稱（舊資料）
+export async function loadSuppliers(db, items = []) {
+  const snap = await getDocs(collection(db, 'suppliers'));
+  const list = snap.docs.map(d => ({ id: d.id, name: d.data().name || '' })).filter(s => s.name);
+  items.forEach(i => {
+    if (i.supplier && !list.some(s => s.name === i.supplier)) list.push({ id: '', name: i.supplier });
+  });
+  return list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+}
+
+// 跟廠商叫貨的品項：食材，或有填廠商、沒有配方的成品（例：外購的貢丸）
+export const isPurchased = (i) => i.kind === '食材' || (!!i.supplier && !i.recipe.length);
+
 // 配方不能繞回自己（例：A 用 B、B 又用 A）；recipe 為 id 這個品項準備存入的新配方
 export function recipeCycle(items, id, recipe) {
   const byId = (x) => items.find(i => i.id === x);

@@ -42,6 +42,16 @@
     <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">向廠商叫貨的食材。叫貨計算會依配方算出需要量，再補足到「預留量」。</p>
 
     <div class="card">
+      <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:10px;">
+        <div style="font-size:15px;font-weight:800;">廠商</div>
+        <span style="flex:1;"></span>
+        <input type="text" class="form-control" id="supName" placeholder="新廠商名稱，例如：菜商" style="width:auto;min-width:200px;" onkeydown="if(event.key==='Enter')addSupplier()">
+        <button class="btn btn-primary btn-sm" id="supAddBtn" onclick="addSupplier()">＋ 新增廠商</button>
+      </div>
+      <div class="flex gap-2 flex-wrap" id="supList2"><span class="text-muted" style="font-size:13px;">載入中…</span></div>
+    </div>
+
+    <div class="card">
       <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:12px;">
         <input type="search" autocomplete="off" name="ing-search" class="form-control mob-tool-search" id="searchInput" placeholder="🔍 搜尋食材、廠商…" style="width:auto;min-width:160px;" oninput="renderTable()">
         <span style="flex:1;"></span>
@@ -64,7 +74,7 @@
     <div class="modal-title" id="itemTitle">＋ 新增食材</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
       <div style="grid-column:1/-1;"><label class="form-label">食材名稱 *</label><input type="text" class="form-control" id="iName" placeholder="例如：醬油"></div>
-      <div style="grid-column:1/-1;"><label class="form-label">廠商</label><input type="text" class="form-control" id="iSupplier" list="supList" placeholder="例如：雜貨" autocomplete="off"><datalist id="supList"></datalist></div>
+      <div style="grid-column:1/-1;"><label class="form-label">廠商</label><input type="text" class="form-control" id="iSupplier" list="supList" placeholder="從名單選，或打新廠商" autocomplete="off"><datalist id="supList"></datalist></div>
       <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="件、包、桶…"></div>
       <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：12瓶／箱"></div>
       <div><label class="form-label">預留量</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="至少要留多少"></div>
@@ -119,9 +129,9 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, updateDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText } from "./app.js?v=20261008";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers } from "./app.js?v=20261008b";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -136,6 +146,7 @@ window.closeModal = (id) => document.getElementById(id).classList.remove('open')
 
 let _ud = null;
 let _items = [];
+let _sups = [];
 const ings = () => _items.filter(i => i.kind === '食材');
 const usedBy = (id) => _items.filter(i => i.recipe.some(r => r.id === id)).map(i => i.name);
 
@@ -148,28 +159,78 @@ onAuthStateChanged(auth, async user => {
 });
 
 async function loadAll() {
-  try { _items = await loadStockItems(db); }
+  try { _items = await loadStockItems(db); _sups = await loadSuppliers(db, _items); }
   catch (e) { document.getElementById('ingTable').innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入失敗，請重新整理</td></tr>'; return; }
+  renderSuppliers();
   renderTable();
 }
+
+// ── 廠商名單 ──
+const itemsOf = (name) => _items.filter(i => i.supplier === name);
+function renderSuppliers() {
+  document.getElementById('supList2').innerHTML = _sups.length ? _sups.map((sp, k) => {
+    const n = itemsOf(sp.name).length;
+    return `<span class="badge" style="background:var(--surface2);color:var(--text1);font-size:13px;padding:6px 6px 6px 12px;display:inline-flex;align-items:center;gap:6px;">
+      ${escHtml(sp.name)} <span style="color:var(--text2);font-weight:500;">${n} 項</span>
+      <button type="button" class="btn btn-sm" style="padding:2px 8px;background:none;color:var(--text2);" aria-label="刪除廠商 ${escHtml(sp.name)}" onclick="delSupplier(${k})">✕</button>
+    </span>`;
+  }).join('') : '<span class="text-muted" style="font-size:13px;">還沒有廠商</span>';
+}
+
+window.addSupplier = async () => {
+  const input = document.getElementById('supName');
+  const name = input.value.trim();
+  if (!name) { showToast('請輸入廠商名稱', 'error'); return; }
+  if (_sups.some(sp => sp.name === name)) { showToast('已有這個廠商', 'error'); return; }
+  const btn = document.getElementById('supAddBtn');
+  btn.disabled = true;
+  try {
+    await addDoc(collection(db, 'suppliers'), { name, createdAt: serverTimestamp() });
+    input.value = '';
+    showToast(`已新增廠商「${name}」`, 'success');
+    loadAll();
+  } catch (e) {
+    showToast('新增失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+window.delSupplier = async (k) => {
+  const sp = _sups[k];
+  if (!sp) return;
+  const n = itemsOf(sp.name).length;
+  if (n) { showToast(`「${sp.name}」還有 ${n} 個品項，請先把品項改到其他廠商`, 'error'); return; }
+  if (!confirm(`確定刪除廠商「${sp.name}」？`)) return;
+  try {
+    if (sp.id) await deleteDoc(doc(db, 'suppliers', sp.id));
+    showToast('廠商已刪除', 'success');
+    loadAll();
+  } catch (e) {
+    showToast('刪除失敗', 'error');
+  }
+};
 
 window.renderTable = () => {
   const kw = document.getElementById('searchInput').value.trim().toLowerCase();
   const tbody = document.getElementById('ingTable');
   const list = ings().filter(i => !kw || `${i.name} ${i.spec} ${i.supplier}`.toLowerCase().includes(kw));
-  if (!ings().length) {
+  if (!ings().length && !_sups.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">還沒有食材，按右上「新增食材」建立</td></tr>';
     return;
   }
-  if (!list.length) {
+  if (kw && !list.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">沒有符合的食材</td></tr>';
     return;
   }
-  const sups = [...new Set(list.map(i => i.supplier || '未設定廠商'))]
-    .sort((a, b) => (a === '未設定廠商') - (b === '未設定廠商') || a.localeCompare(b, 'zh-Hant'));
-  tbody.innerHTML = sups.map(sup => {
+  const names = kw ? [...new Set(list.map(i => i.supplier || '未設定廠商'))]
+    : [..._sups.map(sp => sp.name), ...(list.some(i => !i.supplier) ? ['未設定廠商'] : [])];
+  tbody.innerHTML = names.map(sup => {
     const group = list.filter(i => (i.supplier || '未設定廠商') === sup);
-    return `<tr class="sup-row"><td colspan="6">${escHtml(sup)}（${group.length}）</td></tr>` + group.map(rowHtml).join('');
+    const bought = _items.filter(i => i.kind !== '食材' && i.supplier === sup).map(i => i.name);
+    const extra = bought.length ? `<span style="font-weight:500;color:var(--text2);margin-left:8px;">成品：${escHtml(bought.join('、'))}</span>` : '';
+    return `<tr class="sup-row"><td colspan="6">${escHtml(sup)}（${group.length}）${extra}</td></tr>` +
+      (group.length ? group.map(rowHtml).join('') : '<tr><td colspan="6" class="text-muted" style="font-size:13px;padding:10px 12px;">尚無食材</td></tr>');
   }).join('');
 };
 
@@ -197,8 +258,7 @@ window.openItem = (id) => {
   document.getElementById('iName').value = it ? it.name : '';
   document.getElementById('iSupplier').value = it ? it.supplier : '';
   // 已有的廠商列為選項，新增時打新名稱即可
-  document.getElementById('supList').innerHTML = [...new Set(ings().map(x => x.supplier).filter(Boolean))]
-    .map(x => `<option value="${escHtml(x)}"></option>`).join('');
+  document.getElementById('supList').innerHTML = _sups.map(sp => `<option value="${escHtml(sp.name)}"></option>`).join('');
   document.getElementById('iUnit').value = it ? it.unit : '';
   document.getElementById('iSpec').value = it ? it.spec : '';
   document.getElementById('iSafety').value = it && it.safety > 0 ? it.safety : '';

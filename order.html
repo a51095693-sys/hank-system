@@ -99,7 +99,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox } from "./app.js?v=20261008";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008b";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -213,7 +213,7 @@ window.saveOrder = async () => {
 
 // ── 計算 ──
 // 從成品往下展開配方：每一層先扣掉現有庫存，不夠的才往下推算材料；
-// 食材（沒有配方、要向廠商叫）另外補足到安全庫存當作預留。
+// 跟廠商叫的品項（食材、外購成品）另外補足到安全庫存當作預留。
 function plan() {
   const demand = {};
   Object.entries(_qty).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
@@ -233,7 +233,7 @@ function plan() {
   const make = [], buy = [];
   order.forEach(it => {
     const need = demand[it.id] || 0;
-    if (it.kind === '食材') {
+    if (isPurchased(it)) {
       const q = Math.max(0, need + it.safety - it.stock);
       if (q > 1e-9) buy.push({ it, need, q });
       return;
@@ -277,14 +277,14 @@ function renderResult() {
   const buyHtml = sups.map((sup, k) => {
     const rows = buy.filter(b => (b.it.supplier || '未設定廠商') === sup);
     return `<div class="od-sup">${escHtml(sup)}（${rows.length} 項）</div>
-      <table><thead><tr><th>食材</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${rows.map(buyRow).join('')}</tbody></table>
+      <table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${rows.map(buyRow).join('')}</tbody></table>
       <button class="od-copy" onclick="copyBuy(${k})">複製「${escHtml(sup)}」叫貨單</button>`;
   }).join('');
   _sups = sups;
   document.getElementById('odResult').innerHTML = `
-    <h2>要叫的食材 <small>${date ? md(date) : ''}</small></h2>
+    <h2>要跟廠商叫的貨 <small>${date ? md(date) : ''}</small></h2>
     ${buyHtml ? buyHtml
-      : `<div class="none">${hasOrder ? '食材庫存足夠，不用叫貨' : '左邊輸入叫貨量後會自動計算'}</div>`}
+      : `<div class="none">${hasOrder ? '庫存足夠，不用叫貨' : '左邊輸入叫貨量後會自動計算'}</div>`}
     <h2 style="margin-top:6px;">要生產的成品／半成品</h2>
     ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
       <button class="od-copy ghost" onclick="copyMake()">複製生產單</button>`
