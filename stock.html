@@ -54,7 +54,7 @@
   </aside>
   <main class="main">
     <div class="page-title">🗃️ 品項庫存</div>
-    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">設定品項種類（成品／半成品／食材）與配方，叫貨計算會用配方推算要做多少、要叫多少食材。</p>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">管理成品與半成品。配方請到「🧪 配方設定」，要叫貨的食材請到「🥬 食材」。</p>
 
     <div class="stat-grid">
       <div class="card" style="margin-bottom:0;"><div style="font-size:28px;font-weight:800;" id="stTotal">-</div><div style="font-size:12px;color:var(--text2);">品項數</div></div>
@@ -93,17 +93,13 @@
         <div class="flex gap-2" id="iKinds"></div>
         <div style="font-size:12px;color:var(--text2);margin-top:6px;" id="iKindHint"></div>
       </div>
-      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="盤、包、鍋…" oninput="document.getElementById('iRecipeUnit').textContent = this.value.trim() || '單位'"></div>
+      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="盤、包、鍋…"></div>
       <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：10份／盤"></div>
       <div><label class="form-label">安全庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="低於此數提醒"></div>
       <div id="iStockWrap"><label class="form-label">期初庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
       <div id="iStockHint" class="hidden" style="grid-column:1/-1;font-size:12px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:8px 10px;"></div>
-      <div id="iRecipeWrap" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:12px;">
-        <label class="form-label">配方：每 1 <span id="iRecipeUnit">單位</span>需要</label>
-        <div id="iRecipe" style="display:flex;flex-direction:column;gap:8px;"></div>
-        <button type="button" class="btn btn-outline btn-sm mt-2" onclick="addRecipeRow()">＋ 加入材料</button>
-      </div>
     </div>
+
     <div class="flex gap-2">
       <button class="btn btn-primary w-full" id="itemSaveBtn" onclick="saveItem()">儲存</button>
       <button class="btn btn-outline" onclick="closeModal('itemModal')">取消</button>
@@ -175,7 +171,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS } from "./app.js";
 
@@ -240,8 +236,9 @@ const isLow = (it) => it.safety > 0 && it.stock < it.safety;
 window.renderTable = () => {
   const kw = document.getElementById('searchInput').value.trim().toLowerCase();
   const lowOnly = document.getElementById('filterLow').checked;
-  document.getElementById('stTotal').textContent = _items.length;
-  document.getElementById('stLow').textContent = _items.filter(isLow).length;
+  const own = _items.filter(it => it.kind !== '食材');
+  document.getElementById('stTotal').textContent = own.length;
+  document.getElementById('stLow').textContent = own.filter(isLow).length;
 
   const tbody = document.getElementById('itemTable');
   if (!_items.length) {
@@ -252,7 +249,7 @@ window.renderTable = () => {
     </td></tr>`;
     return;
   }
-  const rows = _items.filter(it =>
+  const rows = _items.filter(it => it.kind !== '食材' &&
     (!lowOnly || isLow(it)) &&
     (!kw || `${it.name} ${it.spec}`.toLowerCase().includes(kw))
   );
@@ -260,7 +257,7 @@ window.renderTable = () => {
     tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">沒有符合條件的品項</td></tr>';
     return;
   }
-  tbody.innerHTML = KINDS.map(k => {
+  tbody.innerHTML = KINDS.filter(k => k !== '食材').map(k => {
     const group = rows.filter(it => it.kind === k);
     if (!group.length) return '';
     return `<tr class="kind-row"><td colspan="6">${k}（${group.length}）</td></tr>` + group.map(rowHtml).join('');
@@ -275,7 +272,7 @@ function recipeText(it) {
 function rowHtml(it) {
   const rc = recipeText(it);
   return `<tr>
-    <td data-label="品名"><div style="font-weight:700;">${escHtml(it.name)}</div>${rc ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;white-space:normal;">配方：每 1 ${escHtml(it.unit)} 用 ${escHtml(rc)}</div>` : (it.kind !== '食材' ? '<div style="font-size:11px;color:var(--danger);margin-top:2px;">尚未設定配方</div>' : '')}</td>
+    <td data-label="品名"><div style="font-weight:700;">${escHtml(it.name)}</div>${rc ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;white-space:normal;">配方：每 1 ${escHtml(it.unit)} 用 ${escHtml(rc)}</div>` : '<div style="font-size:11px;margin-top:2px;"><a href="recipe.html" style="color:var(--danger);">尚未設定配方 →</a></div>'}</td>
     <td data-label="規格" style="font-size:12px;color:var(--text2);">${escHtml(it.spec) || '-'}</td>
     <td data-label="安全庫存" style="color:var(--text2);">${it.safety > 0 ? escHtml(qtyText(it, it.safety)) : '-'}</td>
     <td data-label="目前庫存" style="font-weight:700;${isLow(it) ? 'color:var(--danger);' : ''}">${escHtml(qtyText(it, it.stock))}${isLow(it) ? ' ⚠️' : ''}</td>
@@ -309,60 +306,25 @@ window.importPreset = async () => {
 const KIND_HINT = {
   '成品': '店面會叫貨的品項，叫貨計算時輸入叫貨量。',
   '半成品': '央廚自己做、用來做成品的品項（例如預煮雞肉）。',
-  '食材': '向廠商叫貨的品項，叫貨計算會算出要叫多少。'
+  '食材': '改成食材後，這個品項會移到「🥬 食材」頁管理。'
 };
 let _kind = '成品';
-let _recipe = [];
 let _editId = '';
 
 function renderKinds() {
   document.getElementById('iKinds').innerHTML = KINDS.map(k =>
     `<button type="button" class="btn btn-sm ${k === _kind ? 'btn-primary' : 'btn-outline'}" onclick="pickKind('${k}')">${k}</button>`).join('');
   document.getElementById('iKindHint').textContent = KIND_HINT[_kind];
-  // 食材是買來的，不需要配方
-  document.getElementById('iRecipeWrap').classList.toggle('hidden', _kind === '食材');
 }
 window.pickKind = (k) => { _kind = k; renderKinds(); };
 
-function renderRecipe() {
-  const opts = _items.filter(x => x.id !== _editId);
-  document.getElementById('iRecipe').innerHTML = _recipe.length ? _recipe.map((r, i) => {
-    const c = nameOf(r.id);
-    return `<div class="flex gap-2 items-center">
-      <select class="form-control" style="flex:1;min-width:0;" onchange="setRecipe(${i}, 'id', this.value)">
-        <option value="">選擇材料</option>
-        ${opts.map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.name)}（${o.kind}）</option>`).join('')}
-      </select>
-      <input type="number" min="0" step="any" inputmode="decimal" class="form-control" style="width:90px;" placeholder="數量" value="${r.qty || ''}" onchange="setRecipe(${i}, 'qty', this.value)">
-      <span style="font-size:13px;color:var(--text2);min-width:36px;">${c ? escHtml(c.unit) : ''}</span>
-      <button type="button" class="btn btn-sm btn-outline" aria-label="移除" onclick="removeRecipe(${i})">✕</button>
-    </div>`;
-  }).join('') : '<div style="font-size:12px;color:var(--text3);">尚未設定，叫貨計算時這個品項不會往下推算材料</div>';
-}
-window.addRecipeRow = () => { _recipe.push({ id: '', qty: '' }); renderRecipe(); };
-window.removeRecipe = (i) => { _recipe.splice(i, 1); renderRecipe(); };
-window.setRecipe = (i, key, v) => { _recipe[i][key] = v; if (key === 'id') renderRecipe(); };
 
-// 配方不能繞回自己（例：A 用 B、B 又用 A）
-function makesCycle(id, recipe) {
-  const seen = new Set();
-  const walk = (cid) => {
-    if (cid === id) return true;
-    if (seen.has(cid)) return false;
-    seen.add(cid);
-    return (nameOf(cid)?.recipe || []).some(r => walk(r.id));
-  };
-  return recipe.some(r => walk(r.id));
-}
 
 window.openItem = (id) => {
   const it = id ? _items.find(x => x.id === id) : null;
   _editId = it ? it.id : '';
   _kind = it ? it.kind : '成品';
-  _recipe = it ? it.recipe.map(r => ({ ...r })) : [];
   renderKinds();
-  renderRecipe();
-  document.getElementById('iRecipeUnit').textContent = it ? it.unit : '單位';
   document.getElementById('itemModalTitle').textContent = it ? '✏️ 編輯品項' : '＋ 新增品項';
   document.getElementById('iId').value = it ? it.id : '';
   document.getElementById('iName').value = it ? it.name : '';
@@ -384,13 +346,9 @@ window.saveItem = async () => {
   if (!name) { showToast('請輸入品名', 'error'); return; }
   if (!unit) { showToast('請輸入單位', 'error'); return; }
   if (_items.some(x => x.id !== id && x.name === name)) { showToast('已有相同品名', 'error'); return; }
-  const recipe = _kind === '食材' ? [] : _recipe
-    .filter(r => r.id && parseFloat(r.qty) > 0)
-    .map(r => ({ id: r.id, qty: parseFloat(r.qty) }));
-  if (_kind !== '食材' && _recipe.some(r => r.id && !(parseFloat(r.qty) > 0))) { showToast('配方的數量要大於 0', 'error'); return; }
-  if (id && makesCycle(id, recipe)) { showToast('配方繞回自己了，請檢查材料', 'error'); return; }
+  // 配方在「配方設定」頁編輯；改成食材時清掉配方（食材是買來的）
   const data = {
-    name, unit, kind: _kind, recipe,
+    name, unit, kind: _kind, ...(_kind === '食材' ? { recipe: [] } : {}),
     spec: document.getElementById('iSpec').value.trim(),
     safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
   };
@@ -402,7 +360,7 @@ window.saveItem = async () => {
       showToast('品項已更新', 'success');
     } else {
       const stock = Math.max(0, parseFloat(document.getElementById('iStock').value) || 0);
-      await addDoc(collection(db, 'stockItems'), { ...data, category: '', stock, sort: _items.length, createdAt: serverTimestamp() });
+      await addDoc(collection(db, 'stockItems'), { recipe: [], ...data, category: '', stock, sort: _items.length, createdAt: serverTimestamp() });
       showToast(`品項「${name}」已新增`, 'success');
     }
     closeModal('itemModal');
@@ -525,7 +483,13 @@ window.confirmDelete = async () => {
   const btn = document.getElementById('delConfirmBtn');
   btn.disabled = true;
   try {
-    await deleteDoc(doc(db, 'stockItems', document.getElementById('delId').value));
+    const id = document.getElementById('delId').value;
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'stockItems', id));
+    _items.filter(i => i.recipe.some(r => r.id === id)).forEach(i => {
+      batch.update(doc(db, 'stockItems', i.id), { recipe: i.recipe.filter(r => r.id !== id) });
+    });
+    await batch.commit();
     showToast('品項已刪除', 'success');
     closeModal('delModal');
     loadAll();

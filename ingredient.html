@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>央廚盤點 - 食材</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+#ingTable td:not(:first-child){white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">🥬 食材</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📦 央廚盤點</h2><p>庫存管理</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title">🥬 食材</div>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">向廠商叫貨的食材。叫貨計算會依配方算出需要量，再補足到「預留量」。</p>
+
+    <div class="card">
+      <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:12px;">
+        <input type="search" autocomplete="off" name="ing-search" class="form-control mob-tool-search" id="searchInput" placeholder="🔍 搜尋食材…" style="width:auto;min-width:160px;" oninput="renderTable()">
+        <span style="flex:1;"></span>
+        <button class="btn btn-primary btn-sm" onclick="openItem()">＋ 新增食材</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>食材</th><th>規格</th><th>預留量</th><th>目前庫存</th><th>用在</th><th></th></tr></thead>
+          <tbody id="ingTable"><tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 新增 / 編輯食材 -->
+<div class="modal-bg" id="itemModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title" id="itemTitle">＋ 新增食材</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="grid-column:1/-1;"><label class="form-label">食材名稱 *</label><input type="text" class="form-control" id="iName" placeholder="例如：醬油"></div>
+      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="件、包、桶…"></div>
+      <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：12瓶／箱"></div>
+      <div><label class="form-label">預留量</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="至少要留多少"></div>
+      <div id="iStockWrap"><label class="form-label">目前庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="itemSaveBtn" onclick="saveItem()">儲存</button>
+      <button class="btn btn-outline" onclick="closeModal('itemModal')">取消</button>
+    </div>
+    <input type="hidden" id="iId">
+  </div>
+</div>
+
+<!-- 進貨 -->
+<div class="modal-bg" id="inModal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-title">📥 進貨：<span id="inName"></span></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">目前庫存 <strong id="inNow"></strong></p>
+    <label class="form-label">這次進貨數量 *</label>
+    <div class="flex gap-2 items-center" style="margin-bottom:12px;">
+      <input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="inQty" placeholder="輸入數量" style="font-size:18px;">
+      <span id="inUnit" style="font-size:14px;color:var(--text2);white-space:nowrap;"></span>
+      <span id="inSubWrap" class="flex gap-2 items-center hidden">
+        <span style="color:var(--text2);">＋</span>
+        <input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="inSub" placeholder="0" style="font-size:18px;width:90px;">
+        <span id="inSubUnit" style="font-size:14px;color:var(--text2);white-space:nowrap;"></span>
+      </span>
+    </div>
+    <label class="form-label">備註</label>
+    <input type="text" class="form-control" id="inNote" placeholder="例如：廠商名稱" style="margin-bottom:16px;">
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="inSaveBtn" onclick="saveIn()">登記進貨</button>
+      <button class="btn btn-outline" style="white-space:nowrap;" onclick="closeModal('inModal')">取消</button>
+    </div>
+    <input type="hidden" id="inId">
+  </div>
+</div>
+
+<!-- 確認刪除 -->
+<div class="modal-bg" id="delModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-title" style="color:var(--danger);">⚠️ 確認刪除</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px;" id="delMsg"></p>
+    <div class="flex gap-2">
+      <button class="btn btn-danger w-full" id="delConfirmBtn" onclick="confirmDelete()">確認刪除</button>
+      <button class="btn btn-outline" onclick="closeModal('delModal')">取消</button>
+    </div>
+    <input type="hidden" id="delId">
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, updateDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+window.closeModal = (id) => document.getElementById(id).classList.remove('open');
+['itemModal', 'inModal', 'delModal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => { if (e.target.id === id) closeModal(id); });
+});
+
+let _ud = null;
+let _items = [];
+const ings = () => _items.filter(i => i.kind === '食材');
+const usedBy = (id) => _items.filter(i => i.recipe.some(r => r.id === id)).map(i => i.name);
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  _ud = await getUserData(db, user);
+  if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'inventory.html'; return; }
+  renderSidebar(_ud, 'ingredient.html', auth);
+  loadAll();
+});
+
+async function loadAll() {
+  try { _items = await loadStockItems(db); }
+  catch (e) { document.getElementById('ingTable').innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">載入失敗，請重新整理</td></tr>'; return; }
+  renderTable();
+}
+
+window.renderTable = () => {
+  const kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  const tbody = document.getElementById('ingTable');
+  const list = ings().filter(i => !kw || `${i.name} ${i.spec}`.toLowerCase().includes(kw));
+  if (!ings().length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">還沒有食材，按右上「新增食材」建立</td></tr>';
+    return;
+  }
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center" style="padding:24px;">沒有符合的食材</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(i => {
+    const used = usedBy(i.id);
+    return `<tr>
+      <td data-label="食材" style="font-weight:700;">${escHtml(i.name)}</td>
+      <td data-label="規格" style="font-size:12px;color:var(--text2);">${escHtml(i.spec) || '-'}</td>
+      <td data-label="預留量" style="color:var(--text2);">${i.safety > 0 ? escHtml(qtyText(i, i.safety)) : '-'}</td>
+      <td data-label="目前庫存" style="font-weight:700;">${escHtml(qtyText(i, i.stock))}</td>
+      <td data-label="用在" style="font-size:12px;color:var(--text2);white-space:normal;">${used.length ? escHtml(used.join('、')) : '<span style="color:var(--danger);">還沒用在配方</span>'}</td>
+      <td><div class="flex gap-2">
+        <button class="btn btn-sm btn-primary" onclick="openIn('${i.id}')">📥 進貨</button>
+        <button class="btn btn-sm btn-outline" onclick="openItem('${i.id}')">編輯</button>
+        <button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDel('${i.id}')">刪除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+};
+
+// ── 新增／編輯 ──
+window.openItem = (id) => {
+  const it = id ? _items.find(x => x.id === id) : null;
+  document.getElementById('itemTitle').textContent = it ? '✏️ 編輯食材' : '＋ 新增食材';
+  document.getElementById('iId').value = it ? it.id : '';
+  document.getElementById('iName').value = it ? it.name : '';
+  document.getElementById('iUnit').value = it ? it.unit : '';
+  document.getElementById('iSpec').value = it ? it.spec : '';
+  document.getElementById('iSafety').value = it && it.safety > 0 ? it.safety : '';
+  document.getElementById('iStock').value = '';
+  // 已建立的食材庫存由盤點或「進貨」更新，保留紀錄
+  document.getElementById('iStockWrap').classList.toggle('hidden', !!it);
+  document.getElementById('itemModal').classList.add('open');
+};
+
+window.saveItem = async () => {
+  const id = document.getElementById('iId').value;
+  const name = document.getElementById('iName').value.trim();
+  const unit = document.getElementById('iUnit').value.trim();
+  if (!name) { showToast('請輸入食材名稱', 'error'); return; }
+  if (!unit) { showToast('請輸入單位', 'error'); return; }
+  if (_items.some(x => x.id !== id && x.name === name)) { showToast('已有相同名稱的品項', 'error'); return; }
+  const data = {
+    name, unit,
+    spec: document.getElementById('iSpec').value.trim(),
+    safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
+  };
+  const btn = document.getElementById('itemSaveBtn');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  try {
+    if (id) {
+      await updateDoc(doc(db, 'stockItems', id), data);
+      showToast('食材已更新', 'success');
+    } else {
+      const stock = Math.max(0, parseFloat(document.getElementById('iStock').value) || 0);
+      await addDoc(collection(db, 'stockItems'), {
+        ...data, kind: '食材', category: '', recipe: [], stock, sort: _items.length, createdAt: serverTimestamp()
+      });
+      showToast(`食材「${name}」已新增`, 'success');
+    }
+    closeModal('itemModal');
+    loadAll();
+  } catch (e) {
+    showToast('儲存失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '儲存';
+  }
+};
+
+// ── 進貨 ──
+window.openIn = (id) => {
+  const it = _items.find(x => x.id === id);
+  if (!it) return;
+  document.getElementById('inId').value = id;
+  document.getElementById('inName').textContent = it.name;
+  document.getElementById('inNow').textContent = qtyText(it, it.stock);
+  document.getElementById('inUnit').textContent = it.unit;
+  document.getElementById('inSubUnit').textContent = it.sub || '';
+  document.getElementById('inSubWrap').classList.toggle('hidden', !it.per);
+  ['inQty', 'inSub', 'inNote'].forEach(x => { document.getElementById(x).value = ''; });
+  document.getElementById('inModal').classList.add('open');
+};
+
+window.saveIn = async () => {
+  const it = _items.find(x => x.id === document.getElementById('inId').value);
+  if (!it) return;
+  const big = parseFloat(document.getElementById('inQty').value) || 0;
+  const sub = it.per ? (parseFloat(document.getElementById('inSub').value) || 0) : 0;
+  const qty = big + (it.per ? sub / it.per : 0);
+  if (!(qty > 0)) { showToast('請輸入大於 0 的數量', 'error'); return; }
+  const after = Math.round((it.stock + qty) * 10000) / 10000;
+  const btn = document.getElementById('inSaveBtn');
+  btn.disabled = true; btn.textContent = '登記中…';
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'stockItems', it.id), { stock: after });
+    batch.set(doc(collection(db, 'stockMoves')), {
+      itemId: it.id, itemName: it.name, unit: it.unit, type: '進貨',
+      qty, before: it.stock, after,
+      note: document.getElementById('inNote').value.trim(),
+      by: _ud.name, at: serverTimestamp()
+    });
+    await batch.commit();
+    showToast(`${it.name} +${qtyText(it, qty)}`, 'success');
+    closeModal('inModal');
+    loadAll();
+  } catch (e) {
+    showToast('登記失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '登記進貨';
+  }
+};
+
+// ── 刪除 ──
+window.openDel = (id) => {
+  const it = _items.find(x => x.id === id);
+  if (!it) return;
+  const used = usedBy(id);
+  document.getElementById('delId').value = id;
+  document.getElementById('delMsg').innerHTML = `確定要刪除食材 <strong>${escHtml(it.name)}</strong> 嗎？過去的盤點與異動紀錄會保留。` +
+    (used.length ? `<br><br><span style="color:var(--danger);">這個食材正用在：${escHtml(used.join('、'))}，刪除後這些配方會少算這項材料。</span>` : '');
+  document.getElementById('delModal').classList.add('open');
+};
+
+window.confirmDelete = async () => {
+  const id = document.getElementById('delId').value;
+  const btn = document.getElementById('delConfirmBtn');
+  btn.disabled = true;
+  try {
+    // 一併從用到它的配方中移除，避免配方指向不存在的品項
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'stockItems', id));
+    _items.filter(i => i.recipe.some(r => r.id === id)).forEach(i => {
+      batch.update(doc(db, 'stockItems', i.id), { recipe: i.recipe.filter(r => r.id !== id) });
+    });
+    await batch.commit();
+    showToast('食材已刪除', 'success');
+    closeModal('delModal');
+    loadAll();
+  } catch (e) {
+    showToast('刪除失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>

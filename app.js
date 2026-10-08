@@ -26,6 +26,19 @@ export async function loadStockItems(db) {
     .sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
 }
 
+// 配方不能繞回自己（例：A 用 B、B 又用 A）；recipe 為 id 這個品項準備存入的新配方
+export function recipeCycle(items, id, recipe) {
+  const byId = (x) => items.find(i => i.id === x);
+  const seen = new Set();
+  const walk = (cid) => {
+    if (cid === id) return true;
+    if (seen.has(cid)) return false;
+    seen.add(cid);
+    return (byId(cid)?.recipe || []).some(r => walk(r.id));
+  };
+  return recipe.some(r => walk(r.id));
+}
+
 // 規格寫「N小單位／大單位」且大單位就是品項單位時（例：7包／箱、2.5小鍋／長鍋），
 // 盤點與異動改成「大單位＋小單位」兩格；per = 每個大單位等於幾個小單位
 // 「份」是每盤的份量說明（10份／盤），不是盤點單位，不拆兩格
@@ -106,9 +119,9 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存'],['account.html','👥','帳號管理']]
+    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存'],['recipe.html','🧪','配方設定'],['ingredient.html','🥬','食材'],['account.html','👥','帳號管理']]
     : isManager
-    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存']]
+    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存'],['recipe.html','🧪','配方設定'],['ingredient.html','🥬','食材']]
     : [];
 
   const nav = document.getElementById('sb-nav');
