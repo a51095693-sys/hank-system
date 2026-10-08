@@ -33,6 +33,12 @@ body{background:#F3F4F1}
 .inv-hero .sub{font-size:15px;color:#C9D2CC}
 .inv-hero .ttl{font-size:24px;font-weight:900}
 .inv-pill{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px}
+.inv-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;background:var(--bg);border-radius:14px;padding:4px}
+.inv-tabs:empty{display:none}
+.inv-tab{height:46px;border:none;border-radius:11px;background:none;font-family:inherit;font-size:17px;font-weight:900;color:var(--mute);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.inv-tab .n{font-size:13px;font-weight:700;color:var(--mute);background:#fff;border-radius:999px;padding:1px 8px}
+.inv-tab.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.inv-tab.on .n{background:var(--okbg);color:var(--green)}
 .inv-group{grid-column:1/-1;font-size:15px;font-weight:900;color:var(--ink);margin:14px 4px 8px;padding-bottom:6px;border-bottom:2px solid var(--line)}
 .inv-group:first-child{margin-top:2px}
 .inv-plan tr.grp td{color:#F5C04A;font-weight:800;font-size:13px;padding-top:12px}
@@ -165,6 +171,7 @@ button.inv-li:hover{background:#FAFBF9}
           <div class="inv-count"><span id="cDone">0</span><small> / <span id="cTotal">0</span></small></div>
         </div>
         <div class="inv-prog"><div id="cBar" style="width:0%;"></div></div>
+        <div class="inv-tabs" id="cTabs" role="tablist"></div>
       </div>
       <div id="cList"></div>
       <div class="inv-foot">
@@ -474,9 +481,13 @@ function openCount() {
 }
 
 function renderCount() {
-  const shown = countItems();
-  document.getElementById('cList').innerHTML = shown.length ? shown.map((i, k) => {
-    const head = k === 0 || shown[k - 1].kind !== i.kind ? `<div class="inv-group">${escHtml(i.kind)}</div>` : '';
+  // 成品、食材分頁，一次只顯示一種
+  const all = countItems();
+  const kinds = KINDS.filter(k => all.some(i => i.kind === k));
+  if (!kinds.includes(_cur.tab)) _cur.tab = kinds[0];
+  renderTabs(all, kinds);
+  const shown = all.filter(i => i.kind === _cur.tab);
+  document.getElementById('cList').innerHTML = shown.length ? shown.map(i => {
     const v = _cur.counts[i.id];
     const has = v !== undefined;
     const name = escHtml(i.label);
@@ -493,7 +504,7 @@ function renderCount() {
       inputs = `<div class="inv-num"><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="點我輸入" aria-label="${name} 數量" ${keys} onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
         <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>`;
     }
-    return head + `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
+    return `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
       <div class="info">
         <div class="nm">${name}${has ? CHECK_MARK : ''}</div>
         ${i.spec ? `<div class="sp">${escHtml(i.spec)}</div>` : ''}
@@ -529,7 +540,18 @@ window.setBox = (id) => {
   setQty(id, String(b + p / it.per));
 };
 
+function renderTabs(all, kinds) {
+  document.getElementById('cTabs').innerHTML = kinds.length > 1 ? kinds.map(k => {
+    const list = all.filter(i => i.kind === k);
+    const done = list.filter(i => _cur.counts[i.id] !== undefined).length;
+    const on = k === _cur.tab;
+    return `<button type="button" role="tab" aria-selected="${on}" class="inv-tab${on ? ' on' : ''}" onclick="pickTab('${k}')">${k}<span class="n">${done} / ${list.length}</span></button>`;
+  }).join('') : '';
+}
+window.pickTab = (k) => { _cur.tab = k; renderCount(); window.scrollTo(0, 0); };
+
 function updateProgress() {
+  renderTabs(countItems(), KINDS.filter(k => countItems().some(i => i.kind === k)));
   const list = countItems();
   const done = list.filter(i => _cur.counts[i.id] !== undefined).length;
   document.getElementById('cDone').textContent = done;
@@ -573,6 +595,7 @@ window.saveCount = async () => {
   const missing = list.filter(i => _cur.counts[i.id] === undefined);
   if (!COUNT_TYPES[_cur.type].partial && missing.length) {
     showToast(`還有 ${missing.length} 項沒盤：${missing.slice(0, 3).map(i => i.label).join('、')}${missing.length > 3 ? '…' : ''}`, 'error');
+    if (missing[0].kind !== _cur.tab) { _cur.tab = missing[0].kind; renderCount(); }
     const first = document.getElementById('row-' + missing[0].id);
     if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
