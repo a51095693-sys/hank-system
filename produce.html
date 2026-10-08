@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>央廚盤點 - 生產／出貨</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="inv.css">
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">🏭 生產／出貨</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📦 央廚盤點</h2><p>庫存管理</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="inv">
+      <div class="inv-top">
+        <div><div class="who" id="pWho"></div><h1>生產／出貨</h1></div>
+        <div class="day" id="pDay"></div>
+      </div>
+
+      <div class="inv-bar">
+        <div class="inv-seg" role="tablist">
+          <button role="tab" id="tabIn" onclick="pickMode('in')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>生產入庫
+          </button>
+          <button role="tab" id="tabOut" onclick="pickMode('out')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h11v10H3z"></path><path d="M14 10h4l3 3v4h-7"></path><circle cx="7" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg>出貨
+          </button>
+        </div>
+        <div class="hint" id="pHint" style="font-size:13px;color:var(--mute);"></div>
+        <div class="inv-chips" id="pChips"></div>
+      </div>
+
+      <div id="pList"><div class="text-muted">載入中…</div></div>
+
+      <div class="inv-foot">
+        <button class="inv-big ghost" style="width:110px;font-size:17px;" onclick="clearAll()">清空</button>
+        <button class="inv-big primary" id="pSubmit" onclick="submitMoves()">登記</button>
+      </div>
+
+      <div class="inv-sec" style="margin-top:20px;">今日已登記</div>
+      <div class="inv-list" id="pToday"><div class="inv-li" style="color:var(--mute);justify-content:center;">載入中…</div></div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+
+const MODES = {
+  in: { type: '生產入庫', sign: 1, btn: '登記生產入庫', hint: '做好一批就登記，庫存會增加' },
+  out: { type: '出貨', sign: -1, btn: '登記出貨', hint: '裝車出貨時登記，庫存會扣除' }
+};
+const CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E6B47" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>';
+
+let _ud = null;
+let _items = [];
+let _mode = 'in';
+let _cat = '全部';
+// 本次要登記的數量 {itemId: number}，生產與出貨各自獨立
+const _qty = { in: {}, out: {} };
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  _ud = await getUserData(db, user);
+  if (_ud.role !== 'admin' && _ud.role !== 'manager') {
+    alert('此帳號沒有登記權限，請聯絡管理員');
+    sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; return;
+  }
+  renderSidebar(_ud, 'produce.html', auth);
+  const now = new Date();
+  document.getElementById('pWho').textContent = `${_ud.store || '總公司'} · ${_ud.name}`;
+  document.getElementById('pDay').textContent = `${now.getMonth() + 1}/${now.getDate()}（${'日一二三四五六'[now.getDay()]}）`;
+  pickMode('in');
+  loadAll();
+});
+
+async function loadAll() {
+  try { _items = await loadStockItems(db); }
+  catch (e) { document.getElementById('pList').innerHTML = '<div class="inv-box text-muted">載入失敗，請重新整理</div>'; return; }
+  if (!_items.length) {
+    document.getElementById('pList').innerHTML = '<div class="inv-box">還沒有任何品項，請先到 <a href="stock.html" style="color:var(--green);font-weight:700;">品項庫存</a> 建立</div>';
+    return;
+  }
+  renderList();
+  loadToday();
+}
+
+window.pickMode = (m) => {
+  _mode = m;
+  document.getElementById('tabIn').classList.toggle('on', m === 'in');
+  document.getElementById('tabOut').classList.toggle('on', m === 'out');
+  document.getElementById('tabIn').setAttribute('aria-selected', m === 'in');
+  document.getElementById('tabOut').setAttribute('aria-selected', m === 'out');
+  document.getElementById('pHint').textContent = MODES[m].hint;
+  if (_items.length) renderList();
+  updateSubmit();
+};
+
+window.pickCat = (c) => { _cat = c; renderList(); };
+
+function renderList() {
+  const cats = ['全部', ...new Set(_items.map(i => i.category || '未分類'))];
+  if (!cats.includes(_cat)) _cat = '全部';
+  document.getElementById('pChips').innerHTML = cats.map(c =>
+    `<button class="inv-chip${c === _cat ? ' on' : ''}" onclick="pickCat('${escHtml(c)}')">${escHtml(c)}</button>`).join('');
+  const q = _qty[_mode];
+  const shown = _items.filter(i => _cat === '全部' || (i.category || '未分類') === _cat);
+  document.getElementById('pList').innerHTML = shown.map(i => {
+    const v = q[i.id];
+    const has = v !== undefined && v > 0;
+    return `<div class="inv-item${has ? ' done' : ''}" id="prow-${i.id}" style="${has ? '' : 'border-style:solid;border-width:1px;border-color:var(--line);'}">
+      <div style="flex:1;min-width:0;">
+        <div class="nm">${escHtml(i.name)}${has ? CHECK : ''}</div>
+        <div class="sp">${escHtml(i.spec || i.category || '')}${i.spec || i.category ? ' · ' : ''}庫存 ${fmtQty(i.stock)} ${escHtml(i.unit)}</div>
+      </div>
+      <div class="inv-step">
+        <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少">−</button>
+        <div><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="0" aria-label="${escHtml(i.name)} 數量" onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
+        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>
+      </div>
+    </div>`;
+  }).join('');
+  updateSubmit();
+}
+
+window.bump = (id, d) => {
+  const q = _qty[_mode];
+  const n = Math.max(0, Math.round(((q[id] || 0) + d) * 1000) / 1000);
+  if (n > 0) q[id] = n; else delete q[id];
+  renderList();
+};
+
+window.setQty = (id, val) => {
+  const q = _qty[_mode];
+  const n = parseFloat(val);
+  if (val === '' || n === 0) delete q[id];
+  else if (isNaN(n) || n < 0) { showToast('請輸入 0 以上的數字', 'error'); renderList(); return; }
+  else q[id] = n;
+  // 只更新該列，避免重繪讓下一格失去焦點
+  const row = document.getElementById('prow-' + id);
+  const it = _items.find(i => i.id === id);
+  const has = q[id] !== undefined;
+  if (row && it) {
+    row.classList.toggle('done', has);
+    row.style.cssText = has ? '' : 'border-style:solid;border-width:1px;border-color:var(--line);';
+    row.querySelector('.nm').innerHTML = escHtml(it.name) + (has ? CHECK : '');
+  }
+  updateSubmit();
+};
+
+window.clearAll = () => { _qty[_mode] = {}; renderList(); };
+
+function updateSubmit() {
+  const n = Object.keys(_qty[_mode]).length;
+  const btn = document.getElementById('pSubmit');
+  btn.disabled = n === 0;
+  btn.textContent = n ? `${MODES[_mode].btn}（${n} 項）` : MODES[_mode].btn;
+}
+
+window.submitMoves = async () => {
+  const m = MODES[_mode];
+  const q = _qty[_mode];
+  const rows = _items.filter(i => q[i.id] > 0).map(i => ({ it: i, qty: q[i.id] }));
+  if (!rows.length) return;
+  if (m.sign < 0) {
+    const short = rows.filter(r => r.it.stock - r.qty < 0);
+    if (short.length && !confirm(`以下品項出貨後庫存會變成負數：\n${short.map(r => `・${r.it.name}（庫存 ${fmtQty(r.it.stock)}，出貨 ${fmtQty(r.qty)}）`).join('\n')}\n\n可能是有生產還沒登記。仍要登記嗎？`)) return;
+  }
+  const btn = document.getElementById('pSubmit');
+  btn.disabled = true; btn.textContent = '登記中…';
+  try {
+    const batch = writeBatch(db);
+    rows.forEach(({ it, qty }) => {
+      const delta = m.sign * qty;
+      batch.update(doc(db, 'stockItems', it.id), { stock: increment(delta) });
+      batch.set(doc(collection(db, 'stockMoves')), {
+        itemId: it.id, itemName: it.name, unit: it.unit, type: m.type,
+        qty: delta, before: it.stock, after: Math.round((it.stock + delta) * 1000) / 1000,
+        note: '', by: _ud.name, at: serverTimestamp()
+      });
+    });
+    await batch.commit();
+  } catch (e) {
+    showToast('登記失敗，請檢查網路後重試', 'error');
+    updateSubmit();
+    return;
+  }
+  showToast(`已${m.type} ${rows.length} 項`, 'success');
+  _qty[_mode] = {};
+  loadAll();
+};
+
+async function loadToday() {
+  const box = document.getElementById('pToday');
+  try {
+    const snap = await getDocs(query(collection(db, 'stockMoves'), orderBy('at', 'desc'), limit(300)));
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const list = snap.docs.map(d => d.data())
+      .filter(x => x.at?.toDate && x.at.toDate() >= start && (x.type === '生產入庫' || x.type === '出貨'));
+    if (!list.length) { box.innerHTML = '<div class="inv-li" style="color:var(--mute);justify-content:center;">今天還沒有生產或出貨紀錄</div>'; return; }
+    box.innerHTML = list.map(x => {
+      const t = x.at.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const isIn = x.qty > 0;
+      return `<div class="inv-li">
+        <div><div class="t">${escHtml(x.itemName)}</div><div class="m">${t} · ${escHtml(x.by)}</div></div>
+        <span class="inv-delta ${isIn ? 'in' : 'out'}">${isIn ? '生產 +' : '出貨 −'}${fmtQty(Math.abs(x.qty))} ${escHtml(x.unit)}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="inv-li" style="color:var(--mute);justify-content:center;">紀錄載入失敗</div>';
+  }
+}
+</script>
+</body>
+</html>
