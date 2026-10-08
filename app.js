@@ -19,7 +19,8 @@ export async function loadStockItems(db) {
       const item = {
         id: d.id, name: e.name || '', kind, category: e.category || '',
         unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
-        safety: Number(e.safety) || 0, sort: e.sort ?? 999, recipe
+        safety: Number(e.safety) || 0, sort: e.sort ?? 999, recipe,
+        supplier: e.supplier || ''
       };
       return { ...item, ...subUnit(item) };
     })

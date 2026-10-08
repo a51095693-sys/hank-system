@@ -49,6 +49,7 @@
 .od-res td:first-child{color:#fff;font-weight:700;white-space:normal}
 .od-res tr:hover td{background:none}
 .od-res b{color:#F5C04A;font-weight:900}
+.od-res .od-sup{font-size:14px;font-weight:800;color:#BFE8D0;margin-top:2px}
 .od-res .none{font-size:14px;color:#9AA59F;padding:4px 0}
 .od-res .warn{font-size:11px;color:#F5C04A;font-weight:500;display:block}
 .od-copy{height:48px;border-radius:12px;border:none;background:var(--green2);color:#0E2A1C;font-family:inherit;font-size:16px;font-weight:900;cursor:pointer;width:100%}
@@ -251,6 +252,7 @@ function roundUp(it, q) {
 }
 
 let _plan = { make: [], buy: [] };
+let _sups = [];
 function renderResult() {
   const date = document.getElementById('odDate').value;
   _plan = plan();
@@ -262,17 +264,26 @@ function renderResult() {
     <td>${escHtml(qtyText(m.it, m.it.stock))}</td>
     <td><b>${escHtml(qtyText(m.it, m.q))}</b></td>
   </tr>`).join('');
-  const buyRows = buy.map(b => `<tr>
+  // 要叫的食材依廠商分組，每個廠商一張叫貨單
+  const sups = [...new Set(buy.map(b => b.it.supplier || '未設定廠商'))]
+    .sort((a, b) => (a === '未設定廠商') - (b === '未設定廠商') || a.localeCompare(b, 'zh-Hant'));
+  const buyRow = (b) => `<tr>
     <td>${escHtml(b.it.name)}</td>
     <td>${escHtml(qtyText(b.it, b.need))}</td>
     <td>${escHtml(qtyText(b.it, b.it.stock))}</td>
     <td>${b.it.safety > 0 ? escHtml(qtyText(b.it, b.it.safety)) : '-'}</td>
     <td><b>${escHtml(qtyText(b.it, roundUp(b.it, b.q)))}</b></td>
-  </tr>`).join('');
+  </tr>`;
+  const buyHtml = sups.map((sup, k) => {
+    const rows = buy.filter(b => (b.it.supplier || '未設定廠商') === sup);
+    return `<div class="od-sup">${escHtml(sup)}（${rows.length} 項）</div>
+      <table><thead><tr><th>食材</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${rows.map(buyRow).join('')}</tbody></table>
+      <button class="od-copy" onclick="copyBuy(${k})">複製「${escHtml(sup)}」叫貨單</button>`;
+  }).join('');
+  _sups = sups;
   document.getElementById('odResult').innerHTML = `
     <h2>要叫的食材 <small>${date ? md(date) : ''}</small></h2>
-    ${buyRows ? `<table><thead><tr><th>食材</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${buyRows}</tbody></table>
-      <button class="od-copy" onclick="copyBuy()">複製叫貨單</button>`
+    ${buyHtml ? buyHtml
       : `<div class="none">${hasOrder ? '食材庫存足夠，不用叫貨' : '左邊輸入叫貨量後會自動計算'}</div>`}
     <h2 style="margin-top:6px;">要生產的成品／半成品</h2>
     ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
@@ -289,9 +300,11 @@ async function copyText(text) {
     showToast('複製失敗，請改用截圖', 'error');
   }
 }
-window.copyBuy = () => {
+window.copyBuy = (k) => {
   const date = document.getElementById('odDate').value;
-  copyText(`【叫貨單】${md(date)}\n${_plan.buy.map(b => `${b.it.name}：${qtyText(b.it, roundUp(b.it, b.q))}`).join('\n')}`);
+  const sup = _sups[k];
+  const rows = _plan.buy.filter(b => (b.it.supplier || '未設定廠商') === sup);
+  copyText(`【叫貨單】${md(date)} ${sup}\n${rows.map(b => `${b.it.name}：${qtyText(b.it, roundUp(b.it, b.q))}`).join('\n')}`);
 };
 window.copyMake = () => {
   const date = document.getElementById('odDate').value;
