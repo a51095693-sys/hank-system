@@ -3,19 +3,27 @@ import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/fireba
 
 export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福','新莊'];
 
+// 成品：店面叫貨的品項；半成品：央廚自製、用來做成品；食材：向廠商叫貨
+export const KINDS = ['成品', '半成品', '食材'];
+
 export async function loadStockItems(db) {
   const snap = await getDocs(collection(db, 'stockItems'));
   return snap.docs
     .map(d => {
       const e = d.data();
+      const kind = e.kind === '原物料' ? '食材' : (KINDS.includes(e.kind) ? e.kind : '成品');
+      // 配方：每 1 單位本品項需要的其他品項數量 [{ id, qty }]
+      const recipe = (Array.isArray(e.recipe) ? e.recipe : [])
+        .filter(r => r && r.id && Number(r.qty) > 0)
+        .map(r => ({ id: r.id, qty: Number(r.qty) }));
       const item = {
-        id: d.id, name: e.name || '', kind: e.kind || '成品', category: e.category || '',
+        id: d.id, name: e.name || '', kind, category: e.category || '',
         unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
-        safety: Number(e.safety) || 0, sort: e.sort ?? 999
+        safety: Number(e.safety) || 0, sort: e.sort ?? 999, recipe
       };
       return { ...item, ...subUnit(item) };
     })
-    .sort((a, b) => a.kind.localeCompare(b.kind, 'zh-Hant') || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
+    .sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
 }
 
 // 規格寫「N小單位／大單位」且大單位就是品項單位時（例：7包／箱、2.5小鍋／長鍋），
@@ -98,9 +106,9 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存'],['account.html','👥','帳號管理']]
+    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存'],['account.html','👥','帳號管理']]
     : isManager
-    ? [['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存']]
+    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存']]
     : [];
 
   const nav = document.getElementById('sb-nav');

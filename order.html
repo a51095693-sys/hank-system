@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>央廚盤點 - 叫貨計算</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+.od{--ink:#17201B;--mute:#56605A;--line:#E1E4DF;--bg:#F3F4F1;--green:#1E6B47;--green2:#3FBF7F;--warn:#8A3D08;--warnbg:#FDF1E6;
+  max-width:1120px;color:var(--ink)}
+.od-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:4px 4px 16px}
+.od-top h1{font-size:30px;font-weight:900;letter-spacing:1px;line-height:1.2}
+.od-top .sub{font-size:14px;color:var(--mute)}
+.od-date{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--mute)}
+.od-date input{width:auto;height:44px;font-size:16px;font-weight:700;background:#fff}
+.od-grid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+@media(min-width:1000px){.od-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}}
+.od-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px}
+.od-card h2{font-size:17px;font-weight:900;margin-bottom:4px}
+.od-card .hint{font-size:13px;color:var(--mute);margin-bottom:12px}
+.od-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.od-row:first-of-type{border-top:none}
+.od-row .nm{flex:1;min-width:0;font-size:16px;font-weight:700}
+.od-row .stk{font-size:12px;color:var(--mute);font-weight:400;margin-top:2px}
+.od-in{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.od-in input{width:76px;height:44px;text-align:center;font-size:18px;font-weight:800;border:1.5px solid #C9CFC9;border-radius:10px;font-family:inherit;background:#fff;color:var(--ink);-moz-appearance:textfield}
+.od-in input.sm{width:58px}
+.od-in input::-webkit-outer-spin-button,.od-in input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.od-in input::placeholder{color:#C9CFC9;font-weight:500}
+.od-in input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(30,107,71,.15)}
+.od-in .u{font-size:13px;color:var(--mute);min-width:28px}
+.od-save{margin-top:12px;width:100%;height:52px;border-radius:12px;border:none;background:var(--green);color:#fff;font-family:inherit;font-size:17px;font-weight:900;cursor:pointer}
+.od-save:disabled{opacity:.6;cursor:not-allowed}
+.od-res{background:var(--ink);color:#fff;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.od-res h2{font-size:17px;font-weight:900;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.od-res h2 small{font-size:12px;font-weight:500;color:#9AA59F}
+.od-res table{width:100%;border-collapse:collapse;font-size:15px}
+.od-res th{background:none;border:none;padding:4px 0 6px;font-size:12px;font-weight:500;color:#9AA59F;text-align:right;white-space:nowrap}
+.od-res td{border:none;border-top:1px solid rgba(255,255,255,.1);padding:8px 0;text-align:right;color:#C9D2CC;white-space:nowrap}
+.od-res th:first-child,.od-res td:first-child{text-align:left}
+.od-res td:first-child{color:#fff;font-weight:700;white-space:normal}
+.od-res tr:hover td{background:none}
+.od-res b{color:#F5C04A;font-weight:900}
+.od-res .none{font-size:14px;color:#9AA59F;padding:4px 0}
+.od-res .warn{font-size:11px;color:#F5C04A;font-weight:500;display:block}
+.od-copy{height:48px;border-radius:12px;border:none;background:var(--green2);color:#0E2A1C;font-family:inherit;font-size:16px;font-weight:900;cursor:pointer;width:100%}
+.od-copy.ghost{background:rgba(255,255,255,.1);color:#fff}
+.od-note{font-size:12px;color:#9AA59F;line-height:1.7}
+@media(max-width:768px){.od-top h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">🧾 叫貨計算</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📦 央廚盤點</h2><p>庫存管理</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="od">
+      <div class="od-top">
+        <div><div class="sub">輸入店面叫貨量，扣掉現有庫存，算出要做多少、要叫多少食材</div><h1>叫貨計算</h1></div>
+        <label class="od-date">叫貨日期 <input type="date" class="form-control" id="odDate" onchange="loadOrder()"></label>
+      </div>
+
+      <div class="od-grid">
+        <section class="od-card">
+          <h2>店面叫貨量</h2>
+          <div class="hint">所有店面加起來的總量，空白代表 0</div>
+          <div id="odList"><div class="text-muted">載入中…</div></div>
+          <button class="od-save" id="odSave" onclick="saveOrder()">儲存叫貨量</button>
+          <div style="font-size:12px;color:var(--mute);margin-top:8px;" id="odSaved"></div>
+        </section>
+
+        <section class="od-res" id="odResult"></section>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+
+let _ud = null;
+let _items = [];
+// 店面叫貨量 {成品id: 數量（品項單位，可含小數）}
+let _qty = {};
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const md = (s) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
+const byId = (id) => _items.find(i => i.id === id);
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  _ud = await getUserData(db, user);
+  if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'inventory.html'; return; }
+  renderSidebar(_ud, 'order.html', auth);
+  // 預設算明天的貨
+  const t = new Date(); t.setDate(t.getDate() + 1);
+  document.getElementById('odDate').value = ymd(t);
+  try { _items = await loadStockItems(db); }
+  catch (e) { document.getElementById('odList').innerHTML = '<div class="text-muted">載入失敗，請重新整理</div>'; return; }
+  loadOrder();
+});
+
+window.loadOrder = async () => {
+  const date = document.getElementById('odDate').value;
+  _qty = {};
+  document.getElementById('odSaved').textContent = '';
+  if (date) {
+    try {
+      const snap = await getDoc(doc(db, 'orders', date));
+      if (snap.exists()) {
+        const d = snap.data();
+        _qty = d.qty || {};
+        const at = d.at?.toDate ? d.at.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+        document.getElementById('odSaved').textContent = `已儲存：${d.by || ''} ${at}`;
+      }
+    } catch (e) { showToast('讀取叫貨量失敗', 'error'); }
+  }
+  renderInputs();
+  renderResult();
+};
+
+// ── 輸入叫貨量（只有成品）──
+function renderInputs() {
+  const list = _items.filter(i => i.kind === '成品');
+  if (!list.length) {
+    document.getElementById('odList').innerHTML = '<div class="text-muted" style="font-size:14px;">還沒有「成品」品項，請到品項庫存設定種類</div>';
+    return;
+  }
+  const keys = 'onfocus="this.select()" onkeydown="nextOnEnter(event)"';
+  document.getElementById('odList').innerHTML = list.map(i => {
+    const v = _qty[i.id];
+    let inputs;
+    if (i.per) {
+      const { b, p } = v ? splitBox(v, i.per) : { b: '', p: '' };
+      inputs = `<input type="number" inputmode="numeric" min="0" step="1" value="${b}" placeholder="0" aria-label="${escHtml(i.name)} ${escHtml(i.unit)}數" data-big ${keys} oninput="setQty('${i.id}')"><span class="u">${escHtml(i.unit)}</span>
+        <input class="sm" type="number" inputmode="decimal" min="0" step="any" value="${p || ''}" placeholder="0" aria-label="${escHtml(i.name)} ${escHtml(i.sub)}數" data-sub ${keys} oninput="setQty('${i.id}')"><span class="u">${escHtml(i.sub)}</span>`;
+    } else {
+      inputs = `<input type="number" inputmode="decimal" min="0" step="any" value="${v || ''}" placeholder="0" aria-label="${escHtml(i.name)} 叫貨量" data-big ${keys} oninput="setQty('${i.id}')"><span class="u">${escHtml(i.unit)}</span>`;
+    }
+    return `<div class="od-row" id="orow-${i.id}">
+      <div class="nm">${escHtml(i.name)}<div class="stk">央廚庫存 ${escHtml(qtyText(i, i.stock))}</div></div>
+      <div class="od-in">${inputs}</div>
+    </div>`;
+  }).join('');
+}
+
+window.setQty = (id) => {
+  const it = byId(id);
+  const row = document.getElementById('orow-' + id);
+  if (!it || !row) return;
+  const b = parseFloat(row.querySelector('[data-big]').value) || 0;
+  const p = it.per ? (parseFloat(row.querySelector('[data-sub]').value) || 0) : 0;
+  const q = b + (it.per ? p / it.per : 0);
+  if (q > 0) _qty[id] = q; else delete _qty[id];
+  renderResult();
+};
+
+// 按 Enter 跳到下一格
+window.nextOnEnter = (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const all = [...document.querySelectorAll('#odList input')];
+  const next = all[all.indexOf(e.target) + 1];
+  e.target.blur();
+  if (next) next.focus();
+};
+
+window.saveOrder = async () => {
+  const date = document.getElementById('odDate').value;
+  if (!date) { showToast('請選擇叫貨日期', 'error'); return; }
+  const btn = document.getElementById('odSave');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  try {
+    await setDoc(doc(db, 'orders', date), { date, qty: _qty, by: _ud.name, at: serverTimestamp() });
+    showToast(`已儲存 ${md(date)} 叫貨量`, 'success');
+    document.getElementById('odSaved').textContent = `已儲存：${_ud.name} 剛剛`;
+  } catch (e) {
+    showToast('儲存失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '儲存叫貨量';
+  }
+};
+
+// ── 計算 ──
+// 從成品往下展開配方：每一層先扣掉現有庫存，不夠的才往下推算材料；
+// 食材（沒有配方、要向廠商叫）另外補足到安全庫存當作預留。
+function plan() {
+  const demand = {};
+  Object.entries(_qty).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
+
+  // 依配方排順序：用到某材料的品項一定比該材料先算
+  const order = [];
+  const seen = new Set();
+  const visit = (it) => {
+    if (seen.has(it.id)) return;
+    seen.add(it.id);
+    it.recipe.forEach(r => { const c = byId(r.id); if (c) visit(c); });
+    order.push(it);
+  };
+  _items.forEach(visit);
+  order.reverse();
+
+  const make = [], buy = [];
+  order.forEach(it => {
+    const need = demand[it.id] || 0;
+    if (it.kind === '食材') {
+      const q = Math.max(0, need + it.safety - it.stock);
+      if (q > 1e-9) buy.push({ it, need, q });
+      return;
+    }
+    const q = Math.max(0, need - it.stock);
+    if (q <= 1e-9) return;
+    make.push({ it, need, q, noRecipe: !it.recipe.length });
+    it.recipe.forEach(r => { demand[r.id] = (demand[r.id] || 0) + q * r.qty; });
+  });
+  return { make, buy };
+}
+
+// 叫貨數量無條件進位到整數（雙單位品項進位到整數小單位）
+function roundUp(it, q) {
+  return it.per ? Math.ceil(q * it.per - 1e-9) / it.per : Math.ceil(q - 1e-9);
+}
+
+let _plan = { make: [], buy: [] };
+function renderResult() {
+  const date = document.getElementById('odDate').value;
+  _plan = plan();
+  const { make, buy } = _plan;
+  const hasOrder = Object.keys(_qty).length > 0;
+  const makeRows = make.map(m => `<tr>
+    <td>${escHtml(m.it.name)}${m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : ''}</td>
+    <td>${escHtml(qtyText(m.it, m.need))}</td>
+    <td>${escHtml(qtyText(m.it, m.it.stock))}</td>
+    <td><b>${escHtml(qtyText(m.it, m.q))}</b></td>
+  </tr>`).join('');
+  const buyRows = buy.map(b => `<tr>
+    <td>${escHtml(b.it.name)}</td>
+    <td>${escHtml(qtyText(b.it, b.need))}</td>
+    <td>${escHtml(qtyText(b.it, b.it.stock))}</td>
+    <td>${b.it.safety > 0 ? escHtml(qtyText(b.it, b.it.safety)) : '-'}</td>
+    <td><b>${escHtml(qtyText(b.it, roundUp(b.it, b.q)))}</b></td>
+  </tr>`).join('');
+  document.getElementById('odResult').innerHTML = `
+    <h2>要叫的食材 <small>${date ? md(date) : ''}</small></h2>
+    ${buyRows ? `<table><thead><tr><th>食材</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${buyRows}</tbody></table>
+      <button class="od-copy" onclick="copyBuy()">複製叫貨單</button>`
+      : `<div class="none">${hasOrder ? '食材庫存足夠，不用叫貨' : '左邊輸入叫貨量後會自動計算'}</div>`}
+    <h2 style="margin-top:6px;">要生產的成品／半成品</h2>
+    ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
+      <button class="od-copy ghost" onclick="copyMake()">複製生產單</button>`
+      : `<div class="none">${hasOrder ? '庫存足夠，不用生產' : '—'}</div>`}
+    <div class="od-note">計算方式：叫貨量扣掉成品庫存＝要做的量 → 依配方展開到半成品、食材，每一層都先扣庫存 → 食材再補足到安全庫存（預留），無條件進位成要叫的數量。庫存以最近一次盤點為準。</div>`;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('已複製，可以貼到 LINE', 'success');
+  } catch (e) {
+    showToast('複製失敗，請改用截圖', 'error');
+  }
+}
+window.copyBuy = () => {
+  const date = document.getElementById('odDate').value;
+  copyText(`【叫貨單】${md(date)}\n${_plan.buy.map(b => `${b.it.name}：${qtyText(b.it, roundUp(b.it, b.q))}`).join('\n')}`);
+};
+window.copyMake = () => {
+  const date = document.getElementById('odDate').value;
+  copyText(`【生產單】${md(date)}\n${_plan.make.map(m => `${m.it.name}：${qtyText(m.it, m.q)}`).join('\n')}`);
+};
+</script>
+</body>
+</html>

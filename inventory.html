@@ -208,7 +208,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText } from "./app.js";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -223,7 +223,6 @@ const svg = (paths, size = 24, sw = 2, color = 'currentColor') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 const IC = {
   box: '<path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path>',
-  house: '<path d="M4 20h16"></path><path d="M6 20V10l6-4 6 4v10"></path><path d="M10 20v-5h4v5"></path>',
   search: '<circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path>',
   warn: '<path d="M12 3l10 18H2L12 3z"></path><path d="M12 10v5"></path><path d="M12 18h.01"></path>',
   arrow: '<path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path>',
@@ -233,9 +232,9 @@ const IC = {
 const CHECK_MARK = svg(IC.check, 18, 3, '#1E6B47');
 
 const COUNT_TYPES = {
-  '成品': { title: '成品盤點', ic: IC.box, kinds: ['成品'], partial: false },
-  '原物料': { title: '原物料盤點', ic: IC.house, kinds: ['原物料'], partial: false },
-  '抽盤': { title: '臨時抽盤', ic: IC.search, kinds: ['成品', '原物料'], partial: true }
+  // 每日盤點包含成品、半成品、食材，叫貨計算才有完整庫存（key 沿用「成品」以相容舊紀錄）
+  '成品': { title: '每日盤點', ic: IC.box, kinds: KINDS, partial: false },
+  '抽盤': { title: '臨時抽盤', ic: IC.search, kinds: KINDS, partial: true }
 };
 // 成品每天盤兩次；15:00 前算中午，之後算晚上
 const SLOTS = ['中午', '晚上'];
@@ -313,7 +312,7 @@ async function loadHome() {
 
   const today = todayStr();
   const draft = readDraft();
-  const nFinished = _items.filter(i => i.kind === '成品').length;
+  const nFinished = _items.length;
   const doneOf = (s) => _recent.find(r => r.date === today && r.type === '成品' && r.slot === s);
 
   let html = '';
