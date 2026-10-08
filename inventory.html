@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 盤點</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+<style>
+.inv{max-width:520px}
+.inv-hero{background:#1E293B;color:#fff;border-radius:16px;padding:20px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px}
+.inv-hero .sub{font-size:13px;color:rgba(255,255,255,.65)}
+.inv-hero .ttl{font-size:22px;font-weight:800}
+.inv-pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;align-self:flex-start}
+.inv-big{height:56px;border-radius:12px;border:none;font-family:inherit;font-size:18px;font-weight:800;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
+.inv-big.primary{background:var(--primary);color:#fff}
+.inv-big.dark{background:#1E293B;color:#fff}
+.inv-big.ghost{background:#fff;color:var(--text1);border:1.5px solid var(--border)}
+.inv-big:disabled{background:#E2E8F0;color:var(--text2);cursor:not-allowed}
+.inv-types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.inv-type{height:80px;border:1.5px solid var(--border);background:#fff;border-radius:14px;font-family:inherit;font-size:14px;font-weight:700;color:var(--text1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer}
+.inv-type .ic2{font-size:22px}
+.inv-warn{background:#FFF7ED;border:1px solid #FED7AA;border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.inv-warn h3{font-size:14px;color:#9A3412;margin-bottom:8px}
+.inv-warn .row{display:flex;justify-content:space-between;font-size:15px;padding:3px 0}
+.inv-sec{font-size:13px;font-weight:700;color:var(--text2);margin:6px 4px 8px}
+.inv-list{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.inv-li{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid var(--border);cursor:pointer;width:100%;background:#fff;border-left:none;border-right:none;border-bottom:none;font-family:inherit;text-align:left;color:inherit}
+.inv-li:first-child{border-top:none}
+.inv-li .t{font-size:15px;font-weight:700}
+.inv-li .m{font-size:12px;color:var(--text2);margin-top:2px}
+.inv-bar{position:sticky;top:0;z-index:5;background:var(--surface2);padding-bottom:10px}
+.inv-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.inv-back{width:44px;height:44px;border-radius:12px;border:1.5px solid var(--border);background:#fff;font-size:20px;cursor:pointer;flex-shrink:0}
+.inv-prog{height:8px;background:var(--border);border-radius:999px;overflow:hidden;margin-bottom:10px}
+.inv-prog>div{height:100%;background:var(--success);border-radius:999px;transition:width .2s}
+.inv-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.inv-chip{height:38px;padding:0 16px;border-radius:999px;border:1.5px solid var(--border);background:#fff;font-family:inherit;font-size:14px;font-weight:700;white-space:nowrap;cursor:pointer;color:var(--text1)}
+.inv-chip.on{background:#1E293B;border-color:#1E293B;color:#fff}
+.inv-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:#fff;border:2px dashed #CBD5E1;margin-bottom:10px}
+.inv-item.done{border:1.5px solid var(--border)}
+.inv-item .nm{font-size:18px;font-weight:800}
+.inv-item .sp{font-size:12px;color:var(--text2);margin-top:2px}
+.inv-step{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.inv-step button{width:48px;height:48px;border-radius:12px;font-size:24px;font-weight:700;cursor:pointer;font-family:inherit}
+.inv-step .minus{background:#fff;border:1.5px solid #CBD5E1;color:var(--text1)}
+.inv-step .plus{background:var(--success);border:none;color:#fff}
+.inv-step input{width:64px;height:48px;text-align:center;font-size:22px;font-weight:800;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;background:var(--surface2);color:var(--text1)}
+.inv-step input:focus{outline:none;border-color:var(--primary);background:#fff}
+.inv-unit{font-size:12px;color:var(--text2);text-align:center;margin-top:2px}
+.inv-foot{position:sticky;bottom:0;background:var(--surface2);padding:10px 0 4px;display:flex;gap:10px}
+.inv-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.inv-stats>div{border-radius:12px;padding:10px 12px;background:#fff;border:1px solid var(--border)}
+.inv-stats .n{font-size:24px;font-weight:800}
+.inv-stats .l{font-size:12px;color:var(--text2)}
+.inv-diff{background:#fff;border:1.5px solid #FED7AA;border-radius:14px;padding:14px;margin-bottom:12px}
+.inv-diff .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.inv-diff .delta{font-size:16px;font-weight:800;color:#9A3412;background:#FFF7ED;padding:3px 12px;border-radius:999px}
+.inv-cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.inv-cmp>div{background:var(--surface2);border-radius:10px;padding:8px 12px}
+.inv-cmp .l{font-size:12px;color:var(--text2)}
+.inv-cmp .v{font-size:18px;font-weight:700}
+.inv-reasons{display:flex;flex-wrap:wrap;gap:8px}
+.inv-reason{height:42px;padding:0 14px;border-radius:10px;border:1.5px solid #CBD5E1;background:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;color:var(--text1)}
+.inv-reason.on{background:#1E293B;border-color:#1E293B;color:#fff}
+.inv-done-ic{width:84px;height:84px;border-radius:999px;background:var(--success);color:#fff;font-size:44px;display:flex;align-items:center;justify-content:center;margin:12px auto}
+@media(max-width:768px){.inv{max-width:none}}
+</style>
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">📦 盤點</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📢 客訴反饋系統</h2><p>管理端</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="inv">
+
+    <!-- 1. 盤點首頁 -->
+    <section id="vHome">
+      <div class="page-title">📦 盤點</div>
+      <div id="homeBody"><div class="text-muted">載入中…</div></div>
+    </section>
+
+    <!-- 2. 逐項盤點 -->
+    <section id="vCount" class="hidden">
+      <div class="inv-bar">
+        <div class="inv-head">
+          <button class="inv-back" onclick="leaveCount()" aria-label="返回">‹</button>
+          <div style="flex:1;">
+            <div style="font-size:18px;font-weight:800;" id="cTitle"></div>
+            <div style="font-size:12px;color:var(--text2);">盲盤模式：不顯示系統數量，請照實際點數</div>
+          </div>
+          <div style="font-size:18px;font-weight:800;"><span id="cDone">0</span><span style="font-size:13px;color:var(--text2);"> / <span id="cTotal">0</span></span></div>
+        </div>
+        <div class="inv-prog"><div id="cBar" style="width:0%;"></div></div>
+        <div class="inv-chips" id="cChips"></div>
+      </div>
+      <div id="cList"></div>
+      <div class="inv-foot">
+        <button class="inv-big ghost" style="width:110px;font-size:16px;" onclick="saveDraft(true)">暫存</button>
+        <button class="inv-big dark" id="cNextBtn" onclick="goDiff()">下一步：核對差異</button>
+      </div>
+    </section>
+
+    <!-- 3. 核對差異 -->
+    <section id="vDiff" class="hidden">
+      <div class="inv-head">
+        <button class="inv-back" onclick="show('vCount')" aria-label="返回盤點">‹</button>
+        <div style="font-size:18px;font-weight:800;">核對差異</div>
+      </div>
+      <div class="inv-stats">
+        <div><div class="n" id="dTotal">0</div><div class="l">已盤</div></div>
+        <div style="background:#DCFCE7;border-color:#BBF7D0;"><div class="n" style="color:#166534;" id="dSame">0</div><div class="l" style="color:#166534;">相符</div></div>
+        <div style="background:#FFF7ED;border-color:#FED7AA;"><div class="n" style="color:#9A3412;" id="dDiffN">0</div><div class="l" style="color:#9A3412;">有差異</div></div>
+      </div>
+      <div id="dHint" style="font-size:13px;color:var(--text2);margin:0 4px 10px;">有差異的品項要選原因才能送出</div>
+      <div id="dList"></div>
+      <details class="card" style="padding:14px 16px;" id="dSameBox">
+        <summary style="font-size:15px;font-weight:700;cursor:pointer;">相符品項（<span id="dSame2">0</span>）</summary>
+        <div id="dSameList" style="margin-top:8px;font-size:14px;color:var(--text2);line-height:1.9;"></div>
+      </details>
+      <div class="inv-foot">
+        <button class="inv-big primary" id="dSubmitBtn" onclick="submitCount()">送出盤點</button>
+      </div>
+    </section>
+
+    <!-- 4. 盤點完成 -->
+    <section id="vDone" class="hidden">
+      <div class="inv-done-ic">✓</div>
+      <div style="text-align:center;font-size:24px;font-weight:800;">盤點完成</div>
+      <div style="text-align:center;font-size:13px;color:var(--text2);margin:4px 0 16px;" id="doneMeta"></div>
+      <div class="inv-list" id="doneList"></div>
+      <div class="flex gap-2">
+        <a href="stock.html" class="inv-big ghost" style="font-size:16px;">查看品項庫存</a>
+        <button class="inv-big dark" style="font-size:16px;" onclick="backHome()">回盤點首頁</button>
+      </div>
+    </section>
+
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 盤點紀錄明細 -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal" style="width:560px;">
+    <div class="modal-title" id="detTitle"></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;" id="detMeta"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>品名</th><th>系統</th><th>實盤</th><th>差異</th><th>原因</th></tr></thead>
+        <tbody id="detTable"></tbody>
+      </table>
+    </div>
+    <div class="flex gap-2 mt-4"><button class="btn btn-outline w-full" onclick="closeDetail()">關閉</button></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+window.closeDetail = () => document.getElementById('detailModal').classList.remove('open');
+document.getElementById('detailModal').addEventListener('click', e => { if (e.target.id === 'detailModal') closeDetail(); });
+
+const COUNT_TYPES = {
+  '成品': { title: '成品盤點', ic: '📦', kinds: ['成品'], partial: false },
+  '原物料': { title: '原物料盤點', ic: '🧂', kinds: ['原物料'], partial: false },
+  '抽盤': { title: '臨時抽盤', ic: '🔍', kinds: ['成品', '原物料'], partial: true }
+};
+const REASONS = ['報廢', '試吃／員工餐', '點錯／漏記', '其他'];
+const DRAFT_KEY = 'inv_draft';
+
+let _ud = null;
+let _items = [];
+let _recent = [];
+// 進行中的盤點：{ type, counts: {itemId: number}, reasons: {itemId: string}, cat }
+let _cur = null;
+let _rows = [];
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  _ud = await getUserData(db, user);
+  if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
+  renderSidebar(_ud, 'inventory.html', auth);
+  loadHome();
+});
+
+window.show = (id) => {
+  ['vHome', 'vCount', 'vDiff', 'vDone'].forEach(v => document.getElementById(v).classList.toggle('hidden', v !== id));
+  window.scrollTo(0, 0);
+};
+
+function readDraft() {
+  try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) { return null; }
+}
+window.saveDraft = (notify) => {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(_cur)); } catch (e) {}
+  if (notify) showToast('已暫存，下次可接續盤點', 'success');
+};
+function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+
+const isLow = (it) => it.safety > 0 && it.stock < it.safety;
+const fmtAt = (ts) => ts?.toDate ? ts.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+
+// ── 1. 首頁 ──
+async function loadHome() {
+  show('vHome');
+  const body = document.getElementById('homeBody');
+  try {
+    const [items, snap] = await Promise.all([
+      loadStockItems(db),
+      getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(10)))
+    ]);
+    _items = items;
+    _recent = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    body.innerHTML = '<div class="card text-muted text-center">載入失敗，請重新整理</div>';
+    return;
+  }
+
+  if (!_items.length) {
+    body.innerHTML = `<div class="card text-center" style="padding:28px;">
+      <div style="font-size:15px;margin-bottom:12px;">還沒有任何品項，請先建立要盤點的品項</div>
+      <a href="stock.html" class="btn btn-primary">前往品項庫存</a></div>`;
+    return;
+  }
+
+  const today = todayStr();
+  const doneToday = _recent.find(r => r.date === today && r.type === '成品');
+  const draft = readDraft();
+  const low = _items.filter(isLow);
+  const nFinished = _items.filter(i => i.kind === '成品').length;
+
+  let html = '';
+  if (draft && COUNT_TYPES[draft.type]) {
+    const n = Object.keys(draft.counts || {}).length;
+    html += `<div class="inv-hero">
+      <span class="inv-pill" style="background:#FDE68A;color:#78350F;">未完成</span>
+      <div class="ttl">${COUNT_TYPES[draft.type].title}</div>
+      <div class="sub">上次已盤 ${n} 項，可以接續完成</div>
+      <button class="inv-big primary" onclick="resumeDraft()">繼續盤點 ›</button>
+      <button class="btn btn-sm" style="background:none;color:rgba(255,255,255,.6);align-self:center;" onclick="discardDraft()">放棄這次暫存</button>
+    </div>`;
+  } else {
+    html += `<div class="inv-hero">
+      <span class="inv-pill" style="${doneToday ? 'background:#BBF7D0;color:#14532D;' : 'background:#FDE68A;color:#78350F;'}">${doneToday ? '今日已完成' : '今日未盤點'}</span>
+      <div class="ttl">收工成品盤點</div>
+      <div class="sub">${nFinished} 個品項${doneToday ? `・${escHtml(doneToday.by)} 於 ${fmtAt(doneToday.at)} 完成` : ''}</div>
+      <button class="inv-big primary" onclick="startCount('成品')" ${nFinished ? '' : 'disabled'}>${doneToday ? '再盤一次' : '開始盤點'} ›</button>
+    </div>`;
+  }
+
+  html += `<div class="inv-types">${Object.entries(COUNT_TYPES).map(([k, t]) =>
+    `<button class="inv-type" onclick="startCount('${k}')"><span class="ic2">${t.ic}</span>${t.title}</button>`).join('')}</div>`;
+
+  if (low.length) {
+    html += `<div class="inv-warn"><h3>⚠️ 低於安全庫存（${low.length} 項）</h3>${low.map(i =>
+      `<div class="row"><span>${escHtml(i.name)}</span><span><strong>剩 ${fmtQty(i.stock)} ${escHtml(i.unit)}</strong> <span style="color:#9A3412;font-size:13px;">／ 安全量 ${fmtQty(i.safety)}</span></span></div>`).join('')}</div>`;
+  }
+
+  html += `<div class="inv-sec">最近盤點</div>`;
+  html += _recent.length
+    ? `<div class="inv-list">${_recent.map(r => `<button class="inv-li" onclick="openDetail('${r.id}')">
+        <div><div class="t">${escHtml(r.date)} ${escHtml(r.title)}</div><div class="m">${escHtml(r.by)}・${fmtAt(r.at)}・${r.total} 項</div></div>
+        ${r.diffCount ? `<span class="badge" style="background:#FFF7ED;color:#9A3412;">差異 ${r.diffCount} 項</span>` : '<span class="badge badge-已結案">全部相符</span>'}
+      </button>`).join('')}</div>`
+    : '<div class="card text-muted text-center" style="font-size:13px;">尚無盤點紀錄</div>';
+
+  body.innerHTML = html;
+}
+
+window.backHome = () => loadHome();
+
+window.openDetail = (id) => {
+  const r = _recent.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('detTitle').textContent = `${r.date} ${r.title}`;
+  document.getElementById('detMeta').textContent = `${r.by}・${fmtAt(r.at)}・共 ${r.total} 項，差異 ${r.diffCount} 項`;
+  document.getElementById('detTable').innerHTML = (r.items || []).map(x => `<tr>
+    <td data-label="品名" style="font-weight:700;">${escHtml(x.name)}</td>
+    <td data-label="系統">${fmtQty(x.system)} ${escHtml(x.unit)}</td>
+    <td data-label="實盤">${fmtQty(x.counted)} ${escHtml(x.unit)}</td>
+    <td data-label="差異" style="font-weight:700;color:${x.diff ? '#9A3412' : 'var(--success)'};">${x.diff > 0 ? '+' : ''}${x.diff ? fmtQty(x.diff) : '相符'}</td>
+    <td data-label="原因">${escHtml(x.reason) || '-'}</td>
+  </tr>`).join('');
+  document.getElementById('detailModal').classList.add('open');
+};
+
+// ── 2. 逐項盤點 ──
+window.startCount = (type) => {
+  const draft = readDraft();
+  if (draft && Object.keys(draft.counts || {}).length && !confirm('有一份暫存的盤點還沒完成，要放棄它並開始新的盤點嗎？')) return;
+  _cur = { type, counts: {}, reasons: {}, cat: '全部' };
+  saveDraft(false);
+  openCount();
+};
+window.resumeDraft = () => {
+  _cur = readDraft();
+  _cur.reasons = _cur.reasons || {};
+  _cur.cat = '全部';
+  openCount();
+};
+window.discardDraft = () => {
+  if (!confirm('確定放棄這次暫存的盤點？')) return;
+  clearDraft();
+  loadHome();
+};
+window.leaveCount = () => { saveDraft(false); loadHome(); };
+
+function countItems() {
+  return _items.filter(i => COUNT_TYPES[_cur.type].kinds.includes(i.kind));
+}
+
+function openCount() {
+  const t = COUNT_TYPES[_cur.type];
+  document.getElementById('cTitle').textContent = t.title;
+  // 已刪除的品項不再盤
+  const ids = new Set(countItems().map(i => i.id));
+  Object.keys(_cur.counts).forEach(id => { if (!ids.has(id)) delete _cur.counts[id]; });
+  renderCount();
+  show('vCount');
+}
+
+function renderCount() {
+  const list = countItems();
+  const cats = ['全部', ...new Set(list.map(i => i.category || '未分類'))];
+  if (!cats.includes(_cur.cat)) _cur.cat = '全部';
+  document.getElementById('cChips').innerHTML = cats.map(c =>
+    `<button class="inv-chip${c === _cur.cat ? ' on' : ''}" onclick="pickCat('${escHtml(c)}')">${escHtml(c)}</button>`).join('');
+  const shown = list.filter(i => _cur.cat === '全部' || (i.category || '未分類') === _cur.cat);
+  document.getElementById('cList').innerHTML = shown.length ? shown.map(i => {
+    const v = _cur.counts[i.id];
+    const has = v !== undefined;
+    return `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
+      <div style="flex:1;min-width:0;">
+        <div class="nm">${escHtml(i.name)}${has ? ' <span style="color:var(--success);font-size:16px;">✓</span>' : ''}</div>
+        <div class="sp">${escHtml(i.category || '未分類')}${i.spec ? '・' + escHtml(i.spec) : ''}</div>
+      </div>
+      <div class="inv-step">
+        <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少">−</button>
+        <div><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="—" aria-label="${escHtml(i.name)} 數量" onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
+        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="card text-muted text-center">這個分類沒有品項</div>';
+  updateProgress();
+}
+
+function updateProgress() {
+  const list = countItems();
+  const done = list.filter(i => _cur.counts[i.id] !== undefined).length;
+  document.getElementById('cDone').textContent = done;
+  document.getElementById('cTotal').textContent = list.length;
+  document.getElementById('cBar').style.width = (list.length ? Math.round(done / list.length * 100) : 0) + '%';
+}
+
+window.pickCat = (c) => { _cur.cat = c; renderCount(); };
+
+window.bump = (id, d) => {
+  const cur = _cur.counts[id];
+  _cur.counts[id] = Math.max(0, Math.round(((cur === undefined ? 0 : cur) + d) * 1000) / 1000);
+  saveDraft(false);
+  renderCount();
+};
+
+// 直接輸入時只更新該列，不重繪整個清單，避免跳到下一格時失去焦點
+window.setQty = (id, val) => {
+  if (val === '' || val === null) delete _cur.counts[id];
+  else {
+    const n = parseFloat(val);
+    if (isNaN(n) || n < 0) { showToast('請輸入 0 以上的數字', 'error'); renderCount(); return; }
+    _cur.counts[id] = n;
+  }
+  saveDraft(false);
+  const row = document.getElementById('row-' + id);
+  const has = _cur.counts[id] !== undefined;
+  if (row) {
+    row.classList.toggle('done', has);
+    const nm = row.querySelector('.nm');
+    const it = _items.find(i => i.id === id);
+    if (nm && it) nm.innerHTML = escHtml(it.name) + (has ? ' <span style="color:var(--success);font-size:16px;">✓</span>' : '');
+  }
+  updateProgress();
+};
+
+// ── 3. 核對差異 ──
+window.goDiff = async () => {
+  const list = countItems();
+  const missing = list.filter(i => _cur.counts[i.id] === undefined);
+  if (!COUNT_TYPES[_cur.type].partial && missing.length) {
+    showToast(`還有 ${missing.length} 項沒盤：${missing.slice(0, 3).map(i => i.name).join('、')}${missing.length > 3 ? '…' : ''}`, 'error');
+    const first = document.getElementById('row-' + missing[0].id);
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    else { _cur.cat = '全部'; renderCount(); }
+    return;
+  }
+  if (!list.some(i => _cur.counts[i.id] !== undefined)) { showToast('請至少盤一個品項', 'error'); return; }
+
+  // 重新讀取庫存，避免盤點期間有人登記異動
+  const btn = document.getElementById('cNextBtn');
+  btn.disabled = true; btn.textContent = '計算中…';
+  try { _items = await loadStockItems(db); }
+  catch (e) { showToast('讀取庫存失敗，請重試', 'error'); return; }
+  finally { btn.disabled = false; btn.textContent = '下一步：核對差異'; }
+
+  _rows = countItems().filter(i => _cur.counts[i.id] !== undefined).map(i => ({
+    id: i.id, name: i.name, unit: i.unit,
+    system: i.stock, counted: _cur.counts[i.id],
+    diff: Math.round((_cur.counts[i.id] - i.stock) * 1000) / 1000
+  }));
+  renderDiff();
+  show('vDiff');
+};
+
+function renderDiff() {
+  const diffs = _rows.filter(r => r.diff !== 0);
+  const same = _rows.filter(r => r.diff === 0);
+  document.getElementById('dTotal').textContent = _rows.length;
+  document.getElementById('dSame').textContent = same.length;
+  document.getElementById('dSame2').textContent = same.length;
+  document.getElementById('dDiffN').textContent = diffs.length;
+  document.getElementById('dHint').classList.toggle('hidden', !diffs.length);
+  document.getElementById('dSameBox').classList.toggle('hidden', !same.length);
+  document.getElementById('dSameList').innerHTML = same.map(r => `${escHtml(r.name)} ${fmtQty(r.counted)} ${escHtml(r.unit)}`).join('・');
+  document.getElementById('dList').innerHTML = diffs.length ? diffs.map(r => `<div class="inv-diff">
+    <div class="top"><span style="font-size:18px;font-weight:800;">${escHtml(r.name)}</span><span class="delta">${r.diff > 0 ? '+' : '−'}${fmtQty(Math.abs(r.diff))} ${escHtml(r.unit)}</span></div>
+    <div class="inv-cmp">
+      <div><div class="l">系統應有</div><div class="v">${fmtQty(r.system)} ${escHtml(r.unit)}</div></div>
+      <div><div class="l">實際盤點</div><div class="v">${fmtQty(r.counted)} ${escHtml(r.unit)}</div></div>
+    </div>
+    <div class="inv-reasons">${REASONS.map(rs =>
+      `<button class="inv-reason${_cur.reasons[r.id] === rs ? ' on' : ''}" onclick="pickReason('${r.id}','${rs}')">${rs}</button>`).join('')}</div>
+  </div>`).join('') : '<div class="card text-center" style="color:var(--success);font-weight:700;">👍 全部品項與系統相符</div>';
+  updateSubmit();
+}
+
+window.pickReason = (id, rs) => { _cur.reasons[id] = rs; saveDraft(false); renderDiff(); };
+
+function updateSubmit() {
+  const left = _rows.filter(r => r.diff !== 0 && !_cur.reasons[r.id]).length;
+  const btn = document.getElementById('dSubmitBtn');
+  btn.disabled = left > 0;
+  btn.textContent = left > 0 ? `還有 ${left} 項未選原因` : '送出盤點';
+}
+
+window.submitCount = async () => {
+  const btn = document.getElementById('dSubmitBtn');
+  btn.disabled = true; btn.textContent = '送出中…';
+  const t = COUNT_TYPES[_cur.type];
+  const items = _rows.map(r => ({ ...r, reason: r.diff !== 0 ? _cur.reasons[r.id] : '' }));
+  const diffCount = items.filter(r => r.diff !== 0).length;
+  try {
+    const batch = writeBatch(db);
+    const countRef = doc(collection(db, 'stockCounts'));
+    batch.set(countRef, {
+      date: todayStr(), type: _cur.type, title: t.title,
+      by: _ud.name, at: serverTimestamp(), total: items.length, diffCount, items
+    });
+    items.filter(r => r.diff !== 0).forEach(r => {
+      batch.update(doc(db, 'stockItems', r.id), { stock: r.counted });
+      batch.set(doc(collection(db, 'stockMoves')), {
+        itemId: r.id, itemName: r.name, unit: r.unit, type: '盤點調整',
+        qty: r.diff, before: r.system, after: r.counted, note: r.reason,
+        countId: countRef.id, by: _ud.name, at: serverTimestamp()
+      });
+    });
+    await batch.commit();
+  } catch (e) {
+    showToast('送出失敗，請檢查網路後重試', 'error');
+    updateSubmit();
+    return;
+  }
+  clearDraft();
+  items.forEach(r => { const it = _items.find(i => i.id === r.id); if (it) it.stock = r.counted; });
+  renderDone(t, items, diffCount);
+  show('vDone');
+};
+
+// ── 4. 完成 ──
+function renderDone(t, items, diffCount) {
+  const now = new Date().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  document.getElementById('doneMeta').textContent = `${t.title}・${now}・${_ud.name}`;
+  const low = _items.filter(isLow);
+  const diffs = items.filter(r => r.diff !== 0);
+  let html = `<div class="inv-li" style="cursor:default;"><div><div class="t">✅ 庫存已更新</div><div class="m">${items.length} 個品項以實盤數量為準</div></div></div>`;
+  html += diffCount
+    ? `<div class="inv-li" style="cursor:default;"><div><div class="t">📝 差異 ${diffCount} 項已記錄</div><div class="m">${diffs.map(r => `${escHtml(r.name)} ${r.diff > 0 ? '+' : '−'}${fmtQty(Math.abs(r.diff))}${escHtml(r.unit)}（${escHtml(r.reason)}）`).join('・')}</div></div></div>`
+    : `<div class="inv-li" style="cursor:default;"><div><div class="t">👍 全部相符</div><div class="m">沒有任何差異</div></div></div>`;
+  if (low.length) {
+    html += `<div class="inv-li" style="cursor:default;"><div><div class="t" style="color:#9A3412;">⚠️ ${low.length} 項低於安全庫存</div><div class="m">${low.map(i => `${escHtml(i.name)} 剩 ${fmtQty(i.stock)}${escHtml(i.unit)}`).join('・')}</div></div></div>`;
+  }
+  document.getElementById('doneList').innerHTML = html;
+}
+</script>
+</body>
+</html>

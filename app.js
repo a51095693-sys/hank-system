@@ -12,6 +12,28 @@ export async function loadTags(db) {
   } catch (e) { return []; }
 }
 
+export async function loadStockItems(db) {
+  const snap = await getDocs(collection(db, 'stockItems'));
+  return snap.docs
+    .map(d => {
+      const e = d.data();
+      return {
+        id: d.id, name: e.name || '', kind: e.kind || '成品', category: e.category || '',
+        unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
+        safety: Number(e.safety) || 0, sort: e.sort ?? 999
+      };
+    })
+    .sort((a, b) => a.kind.localeCompare(b.kind, 'zh-Hant') || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
+}
+
+export function fmtQty(n) {
+  return (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString('zh-TW');
+}
+
+export function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 export function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -65,9 +87,9 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['auditlog.html','📜','操作紀錄'],['tags.html','🏷️','標籤管理'],['account.html','👥','帳號管理']]
+    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存'],['auditlog.html','📜','操作紀錄'],['tags.html','🏷️','標籤管理'],['account.html','👥','帳號管理']]
     : isManager
-    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['auditlog.html','📜','操作紀錄']]
+    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存'],['auditlog.html','📜','操作紀錄']]
     : [['submit.html','📝','提交客訴'],['my.html','📋','我的客訴']];
 
   const nav = document.getElementById('sb-nav');

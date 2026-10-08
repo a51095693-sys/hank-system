@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客訴反饋系統 - 品項庫存</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">🗃️ 品項庫存</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2>📢 客訴反饋系統</h2><p>管理端</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title">🗃️ 品項庫存</div>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">管理要盤點的品項，並登記入庫、出貨、報廢，系統才能算出「應有數量」與盤點差異。</p>
+
+    <div class="stat-grid">
+      <div class="card" style="margin-bottom:0;"><div style="font-size:28px;font-weight:800;" id="stTotal">-</div><div style="font-size:12px;color:var(--text2);">品項數</div></div>
+      <div class="card" style="margin-bottom:0;"><div style="font-size:28px;font-weight:800;color:var(--danger);" id="stLow">-</div><div style="font-size:12px;color:var(--text2);">低於安全庫存</div></div>
+      <div class="card" style="margin-bottom:0;"><div style="font-size:16px;font-weight:800;padding-top:8px;" id="stLastCount">-</div><div style="font-size:12px;color:var(--text2);">最近盤點</div></div>
+    </div>
+
+    <div class="card">
+      <div class="flex gap-2 flex-wrap items-center" style="margin-bottom:12px;">
+        <input type="text" class="form-control mob-tool-search" id="searchInput" placeholder="🔍 搜尋品名、分類…" style="width:auto;min-width:160px;" oninput="renderTable()">
+        <select class="form-control" id="filterKind" style="width:auto;" onchange="renderTable()">
+          <option value="">全部種類</option>
+          <option value="成品">成品</option>
+          <option value="原物料">原物料</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--danger);cursor:pointer;">
+          <input type="checkbox" id="filterLow" onchange="renderTable()" style="cursor:pointer;">只看庫存不足
+        </label>
+        <span style="flex:1;"></span>
+        <button class="btn btn-outline btn-sm" onclick="openMoves()">📜 異動紀錄</button>
+        <button class="btn btn-primary btn-sm" id="addItemBtn" onclick="openItem()">＋ 新增品項</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>品名</th><th>種類</th><th>分類</th><th>規格</th><th>目前庫存</th><th>安全庫存</th><th></th><th></th></tr></thead>
+          <tbody id="itemTable"><tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<datalist id="catList">
+  <option value="肉品"></option><option value="醬料"></option><option value="火鍋料"></option><option value="原物料"></option><option value="包材"></option>
+</datalist>
+
+<!-- 新增 / 編輯品項 -->
+<div class="modal-bg" id="itemModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title" id="itemModalTitle">＋ 新增品項</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="grid-column:1/-1;"><label class="form-label">品名 *</label><input type="text" class="form-control" id="iName" placeholder="例如：雞肉"></div>
+      <div><label class="form-label">種類</label>
+        <select class="form-control" id="iKind"><option value="成品">成品</option><option value="原物料">原物料</option></select></div>
+      <div><label class="form-label">分類</label><input type="text" class="form-control" id="iCat" list="catList" placeholder="例如：肉品"></div>
+      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="盤、包、鍋…"></div>
+      <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：10份／盤"></div>
+      <div><label class="form-label">安全庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="低於此數提醒"></div>
+      <div id="iStockWrap"><label class="form-label">期初庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="itemSaveBtn" onclick="saveItem()">儲存</button>
+      <button class="btn btn-outline" onclick="closeModal('itemModal')">取消</button>
+    </div>
+    <input type="hidden" id="iId">
+  </div>
+</div>
+
+<!-- 庫存異動 -->
+<div class="modal-bg" id="moveModal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-title">🔁 庫存異動：<span id="mvName"></span></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">目前庫存 <strong id="mvNow"></strong></p>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">異動類型</label>
+      <div class="flex gap-2 flex-wrap" id="mvTypes"></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label class="form-label">數量 *</label>
+      <input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="mvQty" placeholder="輸入數量" style="font-size:18px;">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label class="form-label">備註</label>
+      <input type="text" class="form-control" id="mvNote" placeholder="例如：出貨給心惦">
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="mvSaveBtn" onclick="saveMove()">登記</button>
+      <button class="btn btn-outline" onclick="closeModal('moveModal')">取消</button>
+    </div>
+    <input type="hidden" id="mvId">
+  </div>
+</div>
+
+<!-- 異動紀錄 -->
+<div class="modal-bg" id="movesModal">
+  <div class="modal" style="width:640px;">
+    <div class="modal-title">📜 最近 100 筆庫存異動</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>時間</th><th>品名</th><th>類型</th><th>數量</th><th>異動後</th><th>人員</th><th>備註</th></tr></thead>
+        <tbody id="movesTable"></tbody>
+      </table>
+    </div>
+    <div class="flex gap-2 mt-4"><button class="btn btn-outline w-full" onclick="closeModal('movesModal')">關閉</button></div>
+  </div>
+</div>
+
+<!-- 確認刪除 -->
+<div class="modal-bg" id="delModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-title" style="color:var(--danger);">⚠️ 確認刪除</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px;">確定要刪除品項 <strong id="delName"></strong> 嗎？過去的盤點與異動紀錄會保留。</p>
+    <div class="flex gap-2">
+      <button class="btn btn-danger w-full" id="delConfirmBtn" onclick="confirmDelete()">確認刪除</button>
+      <button class="btn btn-outline" onclick="closeModal('delModal')">取消</button>
+    </div>
+    <input type="hidden" id="delId">
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml } from "./app.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+window.closeModal = (id) => document.getElementById(id).classList.remove('open');
+['itemModal','moveModal','movesModal','delModal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => { if (e.target.id === id) closeModal(id); });
+});
+
+// NK 新廚平台上的現有商品，品項為空時可一鍵匯入
+const PRESET_ITEMS = [
+  { name: '雞肉', category: '肉品', unit: '盤', spec: '10份／盤' },
+  { name: '滷肉', category: '肉品', unit: '包', spec: '' },
+  { name: '好吃醬', category: '醬料', unit: '鍋', spec: '' },
+  { name: '雞湯', category: '醬料', unit: '包', spec: '' },
+  { name: '辣椒', category: '醬料', unit: '鍋', spec: '' },
+  { name: '油蔥酥', category: '醬料', unit: '罐', spec: '' },
+  { name: '貢丸', category: '火鍋料', unit: '包', spec: '' },
+  { name: '魚丸', category: '火鍋料', unit: '包', spec: '' }
+];
+
+const MOVE_TYPES = [
+  { key: '生產入庫', sign: 1 }, { key: '進貨', sign: 1 },
+  { key: '出貨', sign: -1 }, { key: '報廢', sign: -1 }, { key: '其他扣除', sign: -1 }
+];
+
+let _ud = null;
+let _items = [];
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  _ud = await getUserData(db, user);
+  if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'submit.html'; return; }
+  renderSidebar(_ud, 'stock.html', auth);
+  loadAll();
+});
+
+async function loadAll() {
+  try {
+    _items = await loadStockItems(db);
+  } catch (e) {
+    document.getElementById('itemTable').innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入失敗，請重新整理</td></tr>';
+    return;
+  }
+  renderTable();
+  try {
+    const snap = await getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(1)));
+    const last = snap.docs[0]?.data();
+    document.getElementById('stLastCount').textContent = last
+      ? `${last.date}・${last.by}` : '尚未盤點';
+  } catch (e) { document.getElementById('stLastCount').textContent = '-'; }
+}
+
+const isLow = (it) => it.safety > 0 && it.stock < it.safety;
+
+window.renderTable = () => {
+  const kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  const kind = document.getElementById('filterKind').value;
+  const lowOnly = document.getElementById('filterLow').checked;
+  document.getElementById('stTotal').textContent = _items.length;
+  document.getElementById('stLow').textContent = _items.filter(isLow).length;
+
+  const tbody = document.getElementById('itemTable');
+  if (!_items.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="padding:28px;">
+      <div class="text-muted" style="margin-bottom:12px;">尚無品項</div>
+      <button class="btn btn-primary" id="presetBtn" onclick="importPreset()">一鍵匯入 NK 商品（雞肉、好吃醬等 8 項）</button>
+      <div class="text-muted" style="font-size:12px;margin-top:8px;">或點右上「新增品項」自行建立</div>
+    </td></tr>`;
+    return;
+  }
+  const rows = _items.filter(it =>
+    (!kind || it.kind === kind) &&
+    (!lowOnly || isLow(it)) &&
+    (!kw || `${it.name} ${it.category} ${it.spec}`.toLowerCase().includes(kw))
+  );
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">沒有符合條件的品項</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(it => `<tr>
+    <td data-label="品名" style="font-weight:700;">${escHtml(it.name)}</td>
+    <td data-label="種類"><span class="badge ${it.kind === '成品' ? 'badge-已結案' : 'badge-blue'}">${it.kind}</span></td>
+    <td data-label="分類">${escHtml(it.category) || '-'}</td>
+    <td data-label="規格" style="font-size:12px;color:var(--text2);">${escHtml(it.spec) || '-'}</td>
+    <td data-label="目前庫存" style="font-weight:700;${isLow(it) ? 'color:var(--danger);' : ''}">${fmtQty(it.stock)} ${escHtml(it.unit)}${isLow(it) ? ' ⚠️' : ''}</td>
+    <td data-label="安全庫存" style="color:var(--text2);">${it.safety > 0 ? fmtQty(it.safety) + ' ' + escHtml(it.unit) : '-'}</td>
+    <td><button class="btn btn-sm btn-primary" onclick="openMove('${it.id}')">🔁 異動</button></td>
+    <td><div class="flex gap-2">
+      <button class="btn btn-sm btn-outline" onclick="openItem('${it.id}')">編輯</button>
+      <button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDel('${it.id}')">刪除</button>
+    </div></td>
+  </tr>`).join('');
+};
+
+window.importPreset = async () => {
+  const btn = document.getElementById('presetBtn');
+  btn.disabled = true; btn.textContent = '匯入中…';
+  try {
+    const batch = writeBatch(db);
+    PRESET_ITEMS.forEach((p, i) => {
+      batch.set(doc(collection(db, 'stockItems')), {
+        ...p, kind: '成品', stock: 0, safety: 0, sort: i, createdAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+    showToast('已匯入 8 個品項，請記得設定安全庫存', 'success');
+    loadAll();
+  } catch (e) {
+    showToast('匯入失敗，請重試', 'error');
+    btn.disabled = false; btn.textContent = '一鍵匯入 NK 商品（雞肉、好吃醬等 8 項）';
+  }
+};
+
+window.openItem = (id) => {
+  const it = id ? _items.find(x => x.id === id) : null;
+  document.getElementById('itemModalTitle').textContent = it ? '✏️ 編輯品項' : '＋ 新增品項';
+  document.getElementById('iId').value = it ? it.id : '';
+  document.getElementById('iName').value = it ? it.name : '';
+  document.getElementById('iKind').value = it ? it.kind : '成品';
+  document.getElementById('iCat').value = it ? it.category : '';
+  document.getElementById('iUnit').value = it ? it.unit : '';
+  document.getElementById('iSpec').value = it ? it.spec : '';
+  document.getElementById('iSafety').value = it && it.safety > 0 ? it.safety : '';
+  document.getElementById('iStock').value = '';
+  // 已建立的品項只能透過「異動」或「盤點」改庫存，保留紀錄
+  document.getElementById('iStockWrap').classList.toggle('hidden', !!it);
+  document.getElementById('itemModal').classList.add('open');
+};
+
+window.saveItem = async () => {
+  const id = document.getElementById('iId').value;
+  const name = document.getElementById('iName').value.trim();
+  const unit = document.getElementById('iUnit').value.trim();
+  if (!name) { showToast('請輸入品名', 'error'); return; }
+  if (!unit) { showToast('請輸入單位', 'error'); return; }
+  if (_items.some(x => x.id !== id && x.name === name)) { showToast('已有相同品名', 'error'); return; }
+  const data = {
+    name, unit,
+    kind: document.getElementById('iKind').value,
+    category: document.getElementById('iCat').value.trim(),
+    spec: document.getElementById('iSpec').value.trim(),
+    safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
+  };
+  const btn = document.getElementById('itemSaveBtn');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  try {
+    if (id) {
+      await updateDoc(doc(db, 'stockItems', id), data);
+      showToast('品項已更新', 'success');
+    } else {
+      const stock = Math.max(0, parseFloat(document.getElementById('iStock').value) || 0);
+      await addDoc(collection(db, 'stockItems'), { ...data, stock, sort: _items.length, createdAt: serverTimestamp() });
+      showToast(`品項「${name}」已新增`, 'success');
+    }
+    closeModal('itemModal');
+    loadAll();
+  } catch (e) {
+    showToast('儲存失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '儲存';
+  }
+};
+
+let _mvType = MOVE_TYPES[0].key;
+function renderMoveTypes() {
+  document.getElementById('mvTypes').innerHTML = MOVE_TYPES.map(t =>
+    `<button type="button" class="btn btn-sm ${t.key === _mvType ? 'btn-primary' : 'btn-outline'}" onclick="pickMoveType('${t.key}')">${t.sign > 0 ? '＋' : '－'} ${t.key}</button>`
+  ).join('');
+}
+window.pickMoveType = (k) => { _mvType = k; renderMoveTypes(); };
+
+window.openMove = (id) => {
+  const it = _items.find(x => x.id === id);
+  if (!it) return;
+  _mvType = MOVE_TYPES[0].key;
+  renderMoveTypes();
+  document.getElementById('mvId').value = id;
+  document.getElementById('mvName').textContent = it.name;
+  document.getElementById('mvNow').textContent = `${fmtQty(it.stock)} ${it.unit}`;
+  document.getElementById('mvQty').value = '';
+  document.getElementById('mvNote').value = '';
+  document.getElementById('moveModal').classList.add('open');
+};
+
+window.saveMove = async () => {
+  const it = _items.find(x => x.id === document.getElementById('mvId').value);
+  const qty = parseFloat(document.getElementById('mvQty').value);
+  if (!it) return;
+  if (!(qty > 0)) { showToast('請輸入大於 0 的數量', 'error'); return; }
+  const sign = MOVE_TYPES.find(t => t.key === _mvType).sign;
+  const after = Math.round((it.stock + sign * qty) * 1000) / 1000;
+  if (after < 0) { showToast(`庫存不足，目前只有 ${fmtQty(it.stock)} ${it.unit}`, 'error'); return; }
+  const btn = document.getElementById('mvSaveBtn');
+  btn.disabled = true; btn.textContent = '登記中…';
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'stockItems', it.id), { stock: after });
+    batch.set(doc(collection(db, 'stockMoves')), {
+      itemId: it.id, itemName: it.name, unit: it.unit, type: _mvType,
+      qty: sign * qty, before: it.stock, after,
+      note: document.getElementById('mvNote').value.trim(),
+      by: _ud.name, at: serverTimestamp()
+    });
+    await batch.commit();
+    showToast(`${it.name} ${sign > 0 ? '+' : '−'}${fmtQty(qty)} ${it.unit}`, 'success');
+    closeModal('moveModal');
+    loadAll();
+  } catch (e) {
+    showToast('登記失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '登記';
+  }
+};
+
+window.openMoves = async () => {
+  const tbody = document.getElementById('movesTable');
+  tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:20px;">載入中…</td></tr>';
+  document.getElementById('movesModal').classList.add('open');
+  try {
+    const snap = await getDocs(query(collection(db, 'stockMoves'), orderBy('at', 'desc'), limit(100)));
+    if (snap.empty) { tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:20px;">尚無異動紀錄</td></tr>'; return; }
+    tbody.innerHTML = snap.docs.map(d => {
+      const m = d.data();
+      const at = m.at?.toDate ? m.at.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '-';
+      return `<tr>
+        <td data-label="時間" style="font-size:12px;white-space:nowrap;">${at}</td>
+        <td data-label="品名">${escHtml(m.itemName)}</td>
+        <td data-label="類型">${escHtml(m.type)}</td>
+        <td data-label="數量" style="font-weight:700;color:${m.qty < 0 ? 'var(--danger)' : 'var(--success)'};">${m.qty > 0 ? '+' : ''}${fmtQty(m.qty)} ${escHtml(m.unit)}</td>
+        <td data-label="異動後">${fmtQty(m.after)}</td>
+        <td data-label="人員">${escHtml(m.by)}</td>
+        <td data-label="備註" style="font-size:12px;color:var(--text2);">${escHtml(m.note) || '-'}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:20px;">載入失敗</td></tr>';
+  }
+};
+
+window.openDel = (id) => {
+  const it = _items.find(x => x.id === id);
+  if (!it) return;
+  document.getElementById('delId').value = id;
+  document.getElementById('delName').textContent = it.name;
+  document.getElementById('delModal').classList.add('open');
+};
+
+window.confirmDelete = async () => {
+  const btn = document.getElementById('delConfirmBtn');
+  btn.disabled = true;
+  try {
+    await deleteDoc(doc(db, 'stockItems', document.getElementById('delId').value));
+    showToast('品項已刪除', 'success');
+    closeModal('delModal');
+    loadAll();
+  } catch (e) {
+    showToast('刪除失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
