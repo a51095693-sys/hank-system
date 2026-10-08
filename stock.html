@@ -288,7 +288,7 @@ window.openItem = (id) => {
   // 已建立的品項只能透過「異動」或「盤點」改庫存，保留紀錄
   document.getElementById('iStockWrap').classList.toggle('hidden', !!it);
   document.getElementById('iStockHint').classList.toggle('hidden', !it);
-  if (it) document.getElementById('iStockHint').textContent = `目前庫存 ${fmtQty(it.stock)} ${it.unit}。要修改庫存，請關閉後按該品項的「🔁 異動」→「＝ 校正為」。`;
+  if (it) document.getElementById('iStockHint').textContent = `目前庫存 ${qtyText(it, it.stock)}。要修改庫存，請關閉後按該品項的「🔁 異動」→「＝ 校正為」。`;
   document.getElementById('itemModal').classList.add('open');
 };
 
