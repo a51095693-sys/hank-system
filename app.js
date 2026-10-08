@@ -23,6 +23,8 @@ export async function loadStockItems(db) {
         id: d.id, name: e.name || '', kind, category: e.category || '',
         unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
         safety: Number(e.safety) || 0, sort: e.sort ?? 999, recipe,
+        // 配方是一批的用量，這一批可以做出 yield 單位的本品項（舊資料沒有就是 1）
+        yield: Number(e.yield) > 0 ? Number(e.yield) : 1,
         supplier: e.supplier || ''
       };
       return { ...item, ...subUnit(item) };

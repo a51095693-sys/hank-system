@@ -32,6 +32,8 @@
 .rc-mhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .rc-mhead h2{font-size:20px;font-weight:900}
 .rc-mhead .per{font-size:14px;color:var(--text2)}
+.rc-yield{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#E3F2EA;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:15px;font-weight:700;color:#17201B}
+.rc-yield input{width:110px;height:44px;font-size:18px;font-weight:800;text-align:center}
 .rc-tbl{width:100%;border-collapse:collapse}
 .rc-tbl th{text-align:left}
 .rc-tbl td{padding:8px 10px}
@@ -70,7 +72,7 @@
   </aside>
   <main class="main">
     <div class="page-title">🧪 配方設定</div>
-    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">設定每 1 單位成品要用多少食材。叫貨計算會依配方算出要叫多少食材。</p>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">設定「用多少食材，可以做出多少成品」。叫貨計算會依配方換算要叫多少食材。</p>
     <div class="rc-wrap">
       <aside class="rc-side">
         <div class="ttl">成品</div>
@@ -87,7 +89,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased } from "./app.js?v=20261008d";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased } from "./app.js?v=20261008e";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -100,6 +102,8 @@ let _ud = null;
 let _items = [];
 // 編輯中的配方 {成品id: [{ id, qty }]}，與已儲存的不同時標示為未儲存
 let _edit = {};
+// 編輯中的產出量 {成品id: 一批可以做出多少}
+let _yield = {};
 const SEL_KEY = 'rc_sel';
 let _sel = (() => { try { return localStorage.getItem(SEL_KEY) || ''; } catch (e) { return ''; } })();
 const byId = (id) => _items.find(i => i.id === id);
@@ -123,12 +127,13 @@ async function loadAll() {
   try { _items = await loadStockItems(db); }
   catch (e) { document.getElementById('rcMain').innerHTML = '<div class="text-muted">載入失敗，請重新整理</div>'; return; }
   _edit = {};
-  products().forEach(i => { _edit[i.id] = i.recipe.map(r => ({ ...r })); });
+  _yield = {};
+  products().forEach(i => { _edit[i.id] = i.recipe.map(r => ({ ...r })); _yield[i.id] = String(i.yield); });
   render();
 }
 
 const cleanRecipe = (rows) => rows.filter(r => r.id && Number(r.qty) > 0).map(r => ({ id: r.id, qty: Number(r.qty) }));
-const isDirty = (it) => _edit[it.id] && JSON.stringify(_edit[it.id].map(r => ({ id: r.id, qty: Number(r.qty) || 0 }))) !== JSON.stringify(it.recipe);
+const isDirty = (it) => _edit[it.id] && (JSON.stringify(_edit[it.id].map(r => ({ id: r.id, qty: Number(r.qty) || 0 }))) !== JSON.stringify(it.recipe) || Number(_yield[it.id]) !== it.yield);
 const usedBy = (id) => _items.filter(i => i.recipe.some(r => r.id === id)).map(i => i.label);
 
 function status(it) {
@@ -166,7 +171,7 @@ function renderMain() {
 
   const mats = materials();
   const body = rows.length ? `<div class="table-wrap"><table class="rc-tbl">
-      <thead><tr><th>食材</th><th>數量</th><th>單位</th><th></th></tr></thead>
+      <thead><tr><th>食材</th><th>用量</th><th>單位</th><th></th></tr></thead>
       <tbody>${rows.map((r, i) => {
         const c = byId(r.id);
         return `<tr>
@@ -182,7 +187,10 @@ function renderMain() {
     </table></div>` : `<div class="rc-empty">還沒有設定食材，按下方「＋ 加入食材」開始。</div>`;
 
   main.innerHTML = `
-    <div class="rc-mhead"><h2>${escHtml(it.label)}</h2><span class="per">每 1 ${escHtml(it.unit)} 需要</span></div>
+    <div class="rc-mhead"><h2>${escHtml(it.label)}</h2></div>
+    <div class="rc-yield"><span>用下面這些食材，可以做出</span>
+      <input type="number" min="0" step="any" inputmode="decimal" class="form-control" aria-label="一批可以做出的數量" value="${escHtml(_yield[it.id])}" oninput="setYield(this.value)">
+      <span>${escHtml(it.unit)} ${escHtml(it.label)}</span></div>
     ${body}
     ${mats.length ? '' : '<div class="rc-info" style="margin-top:10px;">還沒有食材可以選，請先到「🥬 食材」新增。</div>'}
     ${used.length ? `<div class="rc-used">用在：${escHtml(used.join('、'))}</div>` : ''}
@@ -201,11 +209,16 @@ window.pick = (id) => {
 };
 window.addLine = () => { _edit[_sel].push({ id: '', qty: '' }); render(); };
 window.removeLine = (i) => { _edit[_sel].splice(i, 1); render(); };
-window.resetLines = () => { _edit[_sel] = byId(_sel).recipe.map(r => ({ ...r })); render(); };
+window.resetLines = () => { const it = byId(_sel); _edit[_sel] = it.recipe.map(r => ({ ...r })); _yield[_sel] = String(it.yield); render(); };
+window.setYield = (v) => { _yield[_sel] = v; refreshDirty(); };
 window.setLine = (i, key, v) => {
   _edit[_sel][i][key] = v;
   if (key === 'id') { render(); return; }
-  // 輸入數量時不重繪表格，避免游標跳掉；只更新未儲存狀態
+  refreshDirty();
+};
+
+// 輸入數字時不重繪表格，避免游標跳掉；只更新未儲存狀態
+function refreshDirty() {
   const it = byId(_sel);
   const dirty = isDirty(it);
   document.getElementById('rcMain').classList.toggle('dirty', dirty);
@@ -218,7 +231,9 @@ window.setLine = (i, key, v) => {
 window.saveRecipe = async () => {
   const it = byId(_sel);
   const rows = _edit[_sel];
-  if (rows.some(r => r.id && !(Number(r.qty) > 0))) { showToast('食材數量要大於 0', 'error'); return; }
+  const yieldQty = Number(_yield[_sel]);
+  if (!(yieldQty > 0)) { showToast('「可以做出」的數量要大於 0', 'error'); return; }
+  if (rows.some(r => r.id && !(Number(r.qty) > 0))) { showToast('食材用量要大於 0', 'error'); return; }
   if (rows.some(r => !r.id && Number(r.qty) > 0)) { showToast('有數量但沒選食材', 'error'); return; }
   const recipe = cleanRecipe(rows);
   const ids = recipe.map(r => r.id);
@@ -227,9 +242,11 @@ window.saveRecipe = async () => {
   const btn = document.getElementById('rcSave');
   btn.disabled = true; btn.textContent = '儲存中…';
   try {
-    await updateDoc(doc(db, 'stockItems', it.id), { recipe });
+    await updateDoc(doc(db, 'stockItems', it.id), { recipe, yield: yieldQty });
     it.recipe = recipe;
+    it.yield = yieldQty;
     _edit[it.id] = recipe.map(r => ({ ...r }));
+    _yield[it.id] = String(yieldQty);
     showToast(`「${it.label}」配方已儲存`, 'success');
     render();
   } catch (e) {
