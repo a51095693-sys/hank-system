@@ -99,7 +99,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008h";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008i";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -242,7 +242,7 @@ function plan() {
     }
     const q = Math.max(0, need - it.stock);
     if (q <= 1e-9) return;
-    make.push({ it, need, q, noRecipe: !it.recipe.length });
+    make.push({ it, need, q, noRecipe: !it.recipe.length && !it.byproduct });
     it.recipe.forEach(r => { if (r.id) demand[r.id] = (demand[r.id] || 0) + q * r.qty / it.yield; });
   });
   return { make, buy };
@@ -261,7 +261,7 @@ function renderResult() {
   const { make, buy } = _plan;
   const hasOrder = Object.keys(_qty).length > 0;
   const makeRows = make.map(m => `<tr>
-    <td>${escHtml(m.it.label)}${m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : ''}</td>
+    <td>${escHtml(m.it.label)}${m.it.byproduct ? `<span class="warn">副產品，${escHtml(m.it.byproductOf || '生產時')}要多撈</span>` : m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : ''}</td>
     <td>${escHtml(qtyText(m.it, m.need))}</td>
     <td>${escHtml(qtyText(m.it, m.it.stock))}</td>
     <td><b>${escHtml(qtyText(m.it, m.q))}</b></td>

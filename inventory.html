@@ -33,6 +33,7 @@ body{background:#F3F4F1}
 .inv-hero .sub{font-size:15px;color:#C9D2CC}
 .inv-hero .ttl{font-size:24px;font-weight:900}
 .inv-pill{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px}
+.inv-remind{background:#FFF7E0;border:1px solid #F5C04A;border-radius:14px;padding:12px 16px;margin-bottom:16px;font-size:15px;line-height:1.7;color:#17201B}
 .inv-slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .inv-slot{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);color:#fff;font-family:inherit;text-align:left;cursor:pointer}
 .inv-slot:hover{background:rgba(255,255,255,.08)}
@@ -208,7 +209,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261008h";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261008i";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -355,7 +356,11 @@ async function loadHome() {
       </button>`).join('')}</div>`
     : '<div class="inv-list"><div class="inv-li" style="color:var(--mute);justify-content:center;">尚無盤點紀錄</div></div>';
 
-  body.innerHTML = `<div class="inv-home"><div>${html}</div><div>${stockCard('目前庫存', lastCountText())}</div></div>`;
+  // 副產品（例：雞湯）低於安全庫存時，提醒現場撈取
+  const scoop = _items.filter(i => i.byproduct && i.safety > 0 && i.stock < i.safety);
+  const remind = scoop.length ? `<div class="inv-remind" role="status">${scoop.map(i =>
+    `<div>🔔 <strong>提醒撈取：${escHtml(i.label)}</strong> 剩 ${escHtml(qtyText(i, i.stock))}，標準 ${escHtml(qtyText(i, i.safety))}，還差 <strong>${escHtml(qtyText(i, i.safety - i.stock))}</strong>${i.byproductOf ? `（${escHtml(i.byproductOf)}）` : ''}</div>`).join('')}</div>` : '';
+  body.innerHTML = `${remind}<div class="inv-home"><div>${html}</div><div>${stockCard('目前庫存', lastCountText())}</div></div>`;
 }
 
 // 完整庫存清單：全部品項的目前數量

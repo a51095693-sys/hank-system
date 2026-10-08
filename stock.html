@@ -99,6 +99,15 @@
         <input type="checkbox" id="iInternal" style="margin-top:3px;cursor:pointer;">
         <span><strong>內部使用</strong><br><span style="color:var(--text2);">只在盤點時出現，不出現在叫貨計算，也不需要設定配方（例：煮雞產出的雞油）</span></span>
       </label>
+      <div style="grid-column:1/-1;background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:13px;">
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="iByproduct" style="margin-top:3px;cursor:pointer;" onchange="document.getElementById('iByWrap').classList.toggle('hidden', !this.checked)">
+          <span><strong>副產品</strong><br><span style="color:var(--text2);">煮其他東西時順便產出（例：煮雞撈的雞湯），不需要配方；低於安全庫存時，盤點首頁會提醒撈取</span></span>
+        </label>
+        <div id="iByWrap" class="hidden flex gap-2 items-center" style="margin-top:8px;">
+          <span style="white-space:nowrap;">提醒文字：</span><input type="text" class="form-control" id="iByproductOf" placeholder="例如：煮雞時撈取">
+        </div>
+      </div>
       <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="盤、包、鍋…" oninput="document.getElementById('iCattyUnit').textContent = this.value.trim() || '單位'"></div>
       <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：10份／盤"></div>
       <div style="grid-column:1/-1;"><label class="form-label">台斤換算（選填，配方要用台斤／兩時才需要）</label>
@@ -184,7 +193,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261008h";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261008i";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -286,7 +295,8 @@ function recipeText(it) {
 
 function rowHtml(it) {
   const rc = recipeText(it);
-  const sub = it.internal ? '<div style="font-size:11px;color:var(--text2);margin-top:2px;">內部使用</div>'
+  const sub = it.byproduct ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">副產品${it.byproductOf ? '：' + escHtml(it.byproductOf) : ''}</div>`
+    : it.internal ? '<div style="font-size:11px;color:var(--text2);margin-top:2px;">內部使用</div>'
     : rc ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;white-space:normal;">配方：做 ${escHtml(qtyText(it, it.yield))} 用 ${escHtml(rc)}</div>`
     : it.supplier ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">外購：${escHtml(it.supplier)}</div>`
     : '<div style="font-size:11px;margin-top:2px;"><a href="recipe.html" style="color:var(--danger);">尚未設定配方 →</a></div>';
@@ -346,6 +356,9 @@ window.openItem = (id) => {
   document.getElementById('iErr').classList.add('hidden');
   document.getElementById('iSupplier').value = it ? it.supplier : '';
   document.getElementById('iInternal').checked = it ? it.internal : false;
+  document.getElementById('iByproduct').checked = it ? it.byproduct : false;
+  document.getElementById('iByproductOf').value = it ? it.byproductOf : '';
+  document.getElementById('iByWrap').classList.toggle('hidden', !(it && it.byproduct));
   document.getElementById('iCatty').value = it && it.catty > 0 ? it.catty : '';
   document.getElementById('iCattyUnit').textContent = it ? it.unit : '單位';
   loadSuppliers(db, _items).then(list => {
@@ -381,6 +394,8 @@ window.saveItem = async () => {
   // 配方在「配方設定」頁編輯；改成食材時清掉配方（食材是買來的）
   const data = {
     name, unit, kind: _kind, supplier, internal: document.getElementById('iInternal').checked,
+    byproduct: document.getElementById('iByproduct').checked,
+    byproductOf: document.getElementById('iByproductOf').value.trim(),
     catty: Math.max(0, parseFloat(document.getElementById('iCatty').value) || 0), ...(_kind === '食材' ? { recipe: [] } : {}),
     spec: document.getElementById('iSpec').value.trim(),
     safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)

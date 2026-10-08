@@ -45,6 +45,9 @@ export async function loadStockItems(db) {
         supplier: e.supplier || '',
         // 內部使用：只出現在盤點，不出現在叫貨計算、不需要配方（例：煮雞產出的雞油）
         internal: !!e.internal,
+        // 副產品：煮其他東西時順便產出（例：煮雞撈的雞湯），不需配方；byproductOf 記錄來源，如「煮雞」
+        byproduct: !!e.byproduct,
+        byproductOf: e.byproductOf || '',
         // 台斤換算：1 單位（桶、箱…）等於幾台斤；0 表示未設定
         catty: Number(e.catty) > 0 ? Number(e.catty) : 0
       };
