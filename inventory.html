@@ -129,6 +129,11 @@ button.inv-li:hover{background:#FAFBF9}
 .inv-plan tr:hover td{background:none}
 .inv-plan .inv-big{height:48px;font-size:16px;border-radius:12px;margin-top:4px}
 #vDone{max-width:640px;margin:0 auto}
+.det-edit{display:flex;gap:8px;flex-wrap:wrap}
+.det-cell{display:flex;align-items:center;gap:4px}
+.det-cell input{width:76px;height:38px;text-align:center;font-size:16px;font-weight:700;border:1.5px solid #C9CFC9;border-radius:8px;font-family:inherit}
+.det-cell input:focus{outline:none;border-color:#1E6B47}
+.det-cell span{font-size:13px;color:#56605A}
 .inv-sheet{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:12px}
 .inv-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line)}
 .inv-row:first-child{border-top:none}
@@ -236,14 +241,14 @@ button.inv-li:hover{background:#FAFBF9}
         <tbody id="detTable"></tbody>
       </table>
     </div>
-    <div class="flex gap-2 mt-4"><button class="btn btn-primary w-full" onclick="copyDetail()">複製這次庫存</button><button class="btn btn-outline" onclick="closeDetail()">關閉</button></div>
+    <div class="flex gap-2 mt-4" id="detActs"></div>
   </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261008j";
 
@@ -463,20 +468,88 @@ function lastCountText() {
 }
 
 let _detail = null;
+let _detEdit = false;
 window.openDetail = (id) => {
   const r = _recent.find(x => x.id === id);
   if (!r) return;
   _detail = r;
-  document.getElementById('detTitle').textContent = `${r.date} ${r.title}`;
-  document.getElementById('detMeta').textContent = `${r.by}・${fmtAt(r.at)}・共 ${r.total} 項`;
-  document.getElementById('detTable').innerHTML = (r.items || []).map(x => {
+  _detEdit = false;
+  renderDetail();
+  document.getElementById('detailModal').classList.add('open');
+};
+function renderDetail() {
+  const r = _detail;
+  document.getElementById('detTitle').textContent = `${r.date} ${r.title}${_detEdit ? '・修改數量' : ''}`;
+  document.getElementById('detMeta').textContent = `${r.by}・${fmtAt(r.at)}・共 ${r.total} 項${r.editedBy ? `・${r.editedBy} 修改過` : ''}`;
+  document.getElementById('detTable').innerHTML = (r.items || []).map((x, k) => {
     const u = _items.find(i => i.id === x.id) || x;
+    let cell = escHtml(qtyText(u, x.counted));
+    if (_detEdit) {
+      const inp = (v, attr, unit) => `<label class="det-cell"><input type="number" min="0" step="any" inputmode="decimal" value="${v}" ${attr} aria-label="${escHtml(x.name)} ${escHtml(unit)}"><span>${escHtml(unit)}</span></label>`;
+      if (u.per) {
+        const { b, p } = splitBox(x.counted, u.per);
+        cell = `<div class="det-edit" data-k="${k}">${inp(b, 'data-box', u.unit)}${inp(p, 'data-pk', u.sub)}</div>`;
+      } else {
+        cell = `<div class="det-edit" data-k="${k}">${inp(x.counted, 'data-one', u.unit || x.unit || '')}</div>`;
+      }
+    }
     return `<tr>
     <td data-label="品名" style="font-weight:700;">${escHtml(x.name)}</td>
-    <td data-label="盤點數量">${escHtml(qtyText(u, x.counted))}</td>
+    <td data-label="盤點數量">${cell}</td>
   </tr>`;
   }).join('');
-  document.getElementById('detailModal').classList.add('open');
+  // 只有最近一次盤點可以修改：之後若又盤點過，庫存已被新的盤點覆蓋
+  const canEdit = _recent[0]?.id === r.id;
+  document.getElementById('detActs').innerHTML = _detEdit
+    ? `<button class="btn btn-primary w-full" id="detSaveBtn" onclick="saveDetailEdit()">儲存修改</button><button class="btn btn-outline" onclick="cancelDetailEdit()">取消</button>`
+    : `<button class="btn btn-primary w-full" onclick="copyDetail()">複製這次庫存</button>${canEdit ? '<button class="btn btn-outline" style="white-space:nowrap;" onclick="startDetailEdit()">修改數量</button>' : ''}<button class="btn btn-outline" onclick="closeDetail()">關閉</button>`;
+}
+window.startDetailEdit = () => { _detEdit = true; renderDetail(); };
+window.cancelDetailEdit = () => { _detEdit = false; renderDetail(); };
+
+// 修改盤點數量：庫存加減「新數量－原盤點數量」，並記一筆「盤點修正」異動
+window.saveDetailEdit = async () => {
+  const r = _detail;
+  const changes = [];
+  for (const el of document.querySelectorAll('#detTable .det-edit')) {
+    const x = r.items[Number(el.dataset.k)];
+    const u = _items.find(i => i.id === x.id);
+    const val = (sel) => { const v = el.querySelector(sel)?.value ?? ''; return v === '' ? 0 : parseFloat(v); };
+    const n = u?.per ? val('[data-box]') + val('[data-pk]') / u.per : val('[data-one]');
+    if (isNaN(n) || n < 0) { showToast(`「${x.name}」請輸入 0 以上的數字`, 'error'); return; }
+    const d = Math.round((n - x.counted) * 10000) / 10000;
+    if (Math.abs(d) >= 0.0001) changes.push({ x, n, d });
+  }
+  if (!changes.length) { _detEdit = false; renderDetail(); showToast('沒有修改', 'success'); return; }
+  const btn = document.getElementById('detSaveBtn');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  try {
+    _items = await loadItems();
+    const batch = writeBatch(db);
+    const items = r.items.map(x => {
+      const c = changes.find(c => c.x === x);
+      return c ? { ...x, counted: c.n, diff: Math.round((c.n - x.system) * 10000) / 10000 } : x;
+    });
+    batch.update(doc(db, 'stockCounts', r.id), { items, editedBy: _ud.name, editedAt: serverTimestamp() });
+    changes.forEach(({ x, n, d }) => {
+      const it = _items.find(i => i.id === x.id);
+      if (!it) return;
+      batch.update(doc(db, 'stockItems', x.id), { stock: increment(d) });
+      batch.set(doc(collection(db, 'stockMoves')), {
+        itemId: x.id, itemName: x.name, unit: x.unit, type: '盤點修正',
+        qty: d, before: it.stock, after: Math.round((it.stock + d) * 10000) / 10000,
+        note: `${r.date} ${r.title}：${fmtQty(x.counted)} → ${fmtQty(n)}`,
+        countId: r.id, by: _ud.name, at: serverTimestamp()
+      });
+    });
+    await batch.commit();
+    showToast(`已修改 ${changes.length} 項，庫存已更新`, 'success');
+    closeDetail();
+    loadHome();
+  } catch (e) {
+    showToast('儲存失敗，請檢查網路後重試', 'error');
+    btn.disabled = false; btn.textContent = '儲存修改';
+  }
 };
 window.copyDetail = () => {
   const r = _detail;
