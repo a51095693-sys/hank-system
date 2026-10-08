@@ -281,7 +281,7 @@ window.saveRecipe = async () => {
     await updateDoc(doc(db, 'stockItems', it.id), { recipe, yield: yieldQty });
     it.recipe = recipe;
     it.yield = yieldQty;
-    _edit[it.id] = recipe.map(r => ({ ...r }));
+    _edit[it.id] = toRows(it);
     _yield[it.id] = String(yieldQty);
     // 用台斤／兩但材料還沒設換算時可以先存，換算設好後叫貨計算才會算進去
     showToast(noCatty ? `已儲存；「${byId(noCatty.id).label}」設好台斤換算後才會算進叫貨` : `「${it.label}」配方已儲存`, 'success');
