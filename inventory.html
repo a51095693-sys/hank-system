@@ -189,7 +189,6 @@ button.inv-li:hover{background:#FAFBF9}
           <div class="inv-count"><span id="cDone">0</span><small> / <span id="cTotal">0</span></small></div>
         </div>
         <div class="inv-prog"><div id="cBar" style="width:0%;"></div></div>
-        <div class="inv-chips" id="cChips"></div>
       </div>
       <div id="cList"></div>
       <div class="inv-foot">
@@ -484,14 +483,13 @@ window.startCount = (type, slot) => {
   if (draft && Object.keys(draft.counts || {}).length && !confirm('有一份暫存的盤點還沒完成，要放棄它並開始新的盤點嗎？')) return;
   // 成品盤點一定歸到中午或晚上；從下方「成品盤點」按鈕進來時依現在時間判斷
   if (type === '成品' && !slot) slot = slotNow();
-  _cur = { type, slot: type === '成品' ? slot : '', counts: {}, reasons: {}, cat: '全部', startedAt: Date.now() };
+  _cur = { type, slot: type === '成品' ? slot : '', counts: {}, reasons: {}, startedAt: Date.now() };
   saveDraft(false);
   openCount();
 };
 window.resumeDraft = () => {
   _cur = readDraft();
   _cur.reasons = _cur.reasons || {};
-  _cur.cat = '全部';
   openCount();
 };
 window.discardDraft = () => {
@@ -515,12 +513,7 @@ function openCount() {
 }
 
 function renderCount() {
-  const list = countItems();
-  const cats = ['全部', ...new Set(list.map(i => i.category || '未分類'))];
-  if (!cats.includes(_cur.cat)) _cur.cat = '全部';
-  document.getElementById('cChips').innerHTML = cats.map(c =>
-    `<button class="inv-chip${c === _cur.cat ? ' on' : ''}" onclick="pickCat('${escHtml(c)}')">${escHtml(c)}</button>`).join('');
-  const shown = list.filter(i => _cur.cat === '全部' || (i.category || '未分類') === _cur.cat);
+  const shown = countItems();
   document.getElementById('cList').innerHTML = shown.length ? shown.map(i => {
     const v = _cur.counts[i.id];
     const has = v !== undefined;
@@ -541,14 +534,14 @@ function renderCount() {
     return `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
       <div class="info">
         <div class="nm">${name}${has ? CHECK_MARK : ''}</div>
-        <div class="sp">${escHtml(i.category || '未分類')}${i.spec ? '・' + escHtml(i.spec) : ''}</div>
+        ${i.spec ? `<div class="sp">${escHtml(i.spec)}</div>` : ''}
       </div>
       <div class="inv-step">
         <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少${i.per ? '一' + escHtml(i.unit) : ''}">−</button>
         ${inputs}
       </div>
     </div>`;
-  }).join('') : '<div class="card text-muted text-center">這個分類沒有品項</div>';
+  }).join('') : '<div class="card text-muted text-center">沒有要盤點的品項</div>';
   updateProgress();
 }
 
@@ -582,7 +575,6 @@ function updateProgress() {
   document.getElementById('cBar').style.width = (list.length ? Math.round(done / list.length * 100) : 0) + '%';
 }
 
-window.pickCat = (c) => { _cur.cat = c; renderCount(); };
 
 window.bump = (id, d) => {
   const cur = _cur.counts[id];
@@ -621,7 +613,6 @@ window.goDiff = async () => {
     showToast(`還有 ${missing.length} 項沒盤：${missing.slice(0, 3).map(i => i.name).join('、')}${missing.length > 3 ? '…' : ''}`, 'error');
     const first = document.getElementById('row-' + missing[0].id);
     if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    else { _cur.cat = '全部'; renderCount(); }
     return;
   }
   if (!list.some(i => _cur.counts[i.id] !== undefined)) { showToast('請至少盤一個品項', 'error'); return; }
