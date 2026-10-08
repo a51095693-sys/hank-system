@@ -31,6 +31,12 @@
 #ingTable td:not(:first-child){white-space:nowrap}
 .sp-tag{display:inline-block;font-size:11px;font-weight:700;color:#1E6B47;background:#E3F2EA;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:2px}
 .sp-warn{color:var(--danger)}
+.sup-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.sup-days label{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
+.sup-days label:has(input:checked){background:#E3F2EA;border-color:#9FD3B7;color:#1E6B47}
+.sp-info{font-size:13px;color:var(--text2);margin:-6px 0 12px;display:flex;gap:6px 14px;flex-wrap:wrap}
+.sp-info:empty{display:none}
+.sp-info .off{color:#8A3D08;font-weight:700}
 @media(max-width:900px){
   .sp-wrap{grid-template-columns:1fr}
   .sp-side{position:static}
@@ -74,6 +80,7 @@
           <input type="search" autocomplete="off" name="ing-search" class="form-control" id="searchInput" placeholder="🔍 搜尋全部食材…" style="width:auto;min-width:180px;" oninput="renderSplit()">
           <span id="spActs" class="flex gap-2"></span>
         </div>
+        <div class="sp-info" id="spInfo"></div>
         <div class="table-wrap">
           <table>
             <thead id="ingHead"></thead>
@@ -108,6 +115,22 @@
       <button class="btn btn-outline" onclick="closeModal('itemModal')">取消</button>
     </div>
     <input type="hidden" id="iId">
+  </div>
+</div>
+
+<!-- 廠商送貨設定 -->
+<div class="modal-bg" id="supModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">🚚 送貨設定：<span id="supMName"></span></div>
+    <label class="form-label">哪幾天有送貨（取消勾選＝休息）</label>
+    <div class="sup-days" id="supDays"></div>
+    <p style="font-size:12px;color:var(--text2);margin:6px 0 14px;">休息日的前一天，叫貨計算會自動叫兩天的量。</p>
+    <label class="form-label">叫貨備註</label>
+    <textarea class="form-control" id="supNote" rows="3" placeholder="例如：最低叫貨 3000 元、前一天晚上 9 點前叫" style="margin-bottom:16px;resize:vertical;"></textarea>
+    <div class="flex gap-2">
+      <button class="btn btn-primary w-full" id="supSaveBtn" onclick="saveSup()">儲存</button>
+      <button class="btn btn-outline" onclick="closeModal('supModal')">取消</button>
+    </div>
   </div>
 </div>
 
@@ -154,7 +177,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty } from "./app.js?v=20261008j";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261008k";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -163,7 +186,7 @@ const db = getFirestore(app, 'default');
 window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
 window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
 window.closeModal = (id) => document.getElementById(id).classList.remove('open');
-['itemModal', 'inModal', 'delModal'].forEach(id => {
+['itemModal', 'inModal', 'delModal', 'supModal'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => { if (e.target.id === id) closeModal(id); });
 });
 
@@ -225,6 +248,40 @@ window.delSupplier = async (k) => {
   }
 };
 
+// ── 廠商送貨設定 ──
+let _supK = -1;
+window.openSup = (k) => {
+  const sp = _sups[k];
+  if (!sp) return;
+  _supK = k;
+  document.getElementById('supMName').textContent = sp.name;
+  document.getElementById('supDays').innerHTML = [...WEEKDAYS].map((d, i) =>
+    `<label><input type="checkbox" value="${i}" ${sp.off.includes(i) ? '' : 'checked'}>${d}</label>`).join('');
+  document.getElementById('supNote').value = sp.note;
+  document.getElementById('supModal').classList.add('open');
+};
+window.saveSup = async () => {
+  const sp = _sups[_supK];
+  if (!sp) return;
+  const off = [...document.querySelectorAll('#supDays input')].filter(x => !x.checked).map(x => Number(x.value));
+  if (off.length === 7) { showToast('至少要有一天送貨', 'error'); return; }
+  const note = document.getElementById('supNote').value.trim();
+  const btn = document.getElementById('supSaveBtn');
+  btn.disabled = true;
+  try {
+    // 舊資料的廠商（只寫在品項上）還沒有文件，這時候補建
+    if (sp.id) await updateDoc(doc(db, 'suppliers', sp.id), { off, note });
+    else await addDoc(collection(db, 'suppliers'), { name: sp.name, off, note, createdAt: serverTimestamp() });
+    closeModal('supModal');
+    showToast(`「${sp.name}」送貨設定已儲存`, 'success');
+    loadAll();
+  } catch (e) {
+    showToast('儲存失敗，請重試', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
 // ── 左右分割：左邊選廠商，右邊顯示該廠商的品項 ──
 const NO_SUP = '未設定廠商';
 const SEL_KEY = 'ing_sup';
@@ -278,6 +335,7 @@ window.renderSplit = () => {
   const title = document.getElementById('spTitle');
   const acts = document.getElementById('spActs');
   const tbody = document.getElementById('ingTable');
+  document.getElementById('spInfo').innerHTML = '';
   if (kw) {
     const hits = _items.filter(i => (i.kind === '食材' || i.supplier) && `${i.name} ${i.spec} ${i.supplier}`.toLowerCase().includes(kw));
     title.innerHTML = `搜尋結果<span class="cnt">${hits.length} 項</span>`;
@@ -297,7 +355,11 @@ window.renderSplit = () => {
   const list = mine(_sel);
   const k = _sups.findIndex(sp => sp.name === _sel);
   title.innerHTML = `${escHtml(_sel)}<span class="cnt">${list.length} 項</span>`;
-  acts.innerHTML = `<button class="btn btn-primary btn-sm" onclick="openItem('', ${k})">＋ 新增食材</button>` +
+  const sp = _sups[k];
+  document.getElementById('spInfo').innerHTML = sp
+    ? `<span class="${sp.off.length ? 'off' : ''}">🚚 ${escHtml(offText(sp.off) || '每天送貨')}</span>${sp.note ? `<span>📝 ${escHtml(sp.note)}</span>` : ''}` : '';
+  acts.innerHTML = (sp ? `<button class="btn btn-sm btn-outline" onclick="openSup(${k})">🚚 送貨設定</button>` : '') +
+    `<button class="btn btn-primary btn-sm" onclick="openItem('', ${k})">＋ 新增食材</button>` +
     (k >= 0 && !list.length ? `<button class="btn btn-sm btn-outline" onclick="delSupplier(${k})">刪除這個廠商</button>` : '');
   document.getElementById('ingHead').innerHTML = head(false);
   tbody.innerHTML = list.length ? list.map(i => rowHtml(i, false)).join('')

@@ -100,7 +100,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty } from "./app.js?v=20261008j";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261008k";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -113,10 +113,16 @@ let _ud = null;
 let _items = [];
 // 店面叫貨量 {成品id: 數量（品項單位，可含小數）}
 let _qty = {};
+// 隔天的店面叫貨量（沒輸入時為 null）：廠商隔天休息時要一起叫
+let _qtyNext = null;
+// 廠商送貨設定 {名稱: { off, note }}
+let _supCfg = {};
 
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const md = (s) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
 const byId = (id) => _items.find(i => i.id === id);
+const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return ymd(d); };
+const dow = (s) => new Date(s + 'T00:00:00').getDay();
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
@@ -126,7 +132,10 @@ onAuthStateChanged(auth, async user => {
   // 預設算明天的貨
   const t = new Date(); t.setDate(t.getDate() + 1);
   document.getElementById('odDate').value = ymd(t);
-  try { _items = await loadStockItems(db); }
+  try {
+    _items = await loadStockItems(db);
+    (await loadSuppliers(db, _items)).forEach(s => { _supCfg[s.name] = s; });
+  }
   catch (e) { document.getElementById('odList').innerHTML = '<div class="text-muted">載入失敗，請重新整理</div>'; return; }
   loadOrder();
 });
@@ -134,6 +143,7 @@ onAuthStateChanged(auth, async user => {
 window.loadOrder = async () => {
   const date = document.getElementById('odDate').value;
   _qty = {};
+  _qtyNext = null;
   document.getElementById('odSaved').textContent = '';
   if (date) {
     try {
@@ -144,6 +154,8 @@ window.loadOrder = async () => {
         const at = d.at?.toDate ? d.at.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
         document.getElementById('odSaved').textContent = `已儲存：${d.by || ''} ${at}`;
       }
+      const next = await getDoc(doc(db, 'orders', addDays(date, 1)));
+      _qtyNext = next.exists() ? (next.data().qty || {}) : null;
     } catch (e) { showToast('讀取叫貨量失敗', 'error'); }
   }
   renderInputs();
@@ -215,9 +227,9 @@ window.saveOrder = async () => {
 
 // ── 計算 ──
 // 從成品往下展開配方：每一層都補足到安全庫存，扣掉現有庫存，不夠的才往下推算材料。
-function plan() {
+function plan(qty = _qty) {
   const demand = {};
-  Object.entries(_qty).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
+  Object.entries(qty).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
 
   // 依配方排順序：用到某材料的品項一定比該材料先算
   const order = [];
@@ -282,7 +294,18 @@ let _sups = [];
 function renderResult() {
   const date = document.getElementById('odDate').value;
   _plan = plan();
-  const { make, buy } = _plan;
+  const { make } = _plan;
+  // 廠商隔天休息：這家的貨改用「今天＋明天」的叫貨量計算（明天沒輸入就先當作跟今天一樣）
+  const wd = date ? dow(date) : -1;
+  const offTomorrow = (sup) => wd >= 0 && (_supCfg[sup]?.off || []).includes((wd + 1) % 7);
+  const offToday = (sup) => wd >= 0 && (_supCfg[sup]?.off || []).includes(wd);
+  const buy = _plan.buy.filter(b => !offTomorrow(b.it.supplier || '未設定廠商'));
+  if (Object.keys(_supCfg).some(offTomorrow)) {
+    const two = { ..._qty };
+    Object.entries(_qtyNext || _qty).forEach(([id, q]) => { two[id] = (two[id] || 0) + q; });
+    buy.push(...plan(two).buy.filter(b => offTomorrow(b.it.supplier || '未設定廠商')));
+  }
+  _plan.buy = buy;
   const hasOrder = Object.keys(_qty).length > 0;
   const makeRows = make.map(m => `<tr>
     <td>${escHtml(m.it.label)}${m.it.byproduct ? `<span class="warn">副產品，${escHtml(m.it.byproductOf || '生產時')}要多撈</span>` : m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : `<span class="uses">用料：${escHtml(usesText(m))}</span>`}</td>
@@ -303,7 +326,10 @@ function renderResult() {
   </tr>`;
   const buyHtml = sups.map((sup, k) => {
     const rows = buy.filter(b => (b.it.supplier || '未設定廠商') === sup);
-    return `<div class="od-sup">${escHtml(sup)}（${rows.length} 項）</div>
+    const cfg = _supCfg[sup];
+    const tip = offToday(sup) ? `<span class="warn">⚠️ 週${WEEKDAYS[wd]}休息不送貨，這些應該在前一天一起叫</span>`
+      : offTomorrow(sup) ? `<span class="warn">明天（週${WEEKDAYS[(wd + 1) % 7]}）休息，已含兩天的量${_qtyNext ? '' : '（明天叫貨量還沒輸入，先用今天的量估）'}</span>` : '';
+    return `<div class="od-sup">${escHtml(sup)}（${rows.length} 項）${tip}${cfg?.note ? `<span class="warn" style="color:#C9D2CC;">📝 ${escHtml(cfg.note)}</span>` : ''}</div>
       <table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${rows.map(buyRow).join('')}</tbody></table>
       <button class="od-copy" onclick="copyBuy(${k})">複製「${escHtml(sup)}」叫貨單</button>`;
   }).join('');

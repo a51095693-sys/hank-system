@@ -69,12 +69,17 @@ export async function loadStockItems(db) {
 // 廠商名單：suppliers 集合裡建立的廠商，加上品項上已填寫的廠商名稱（舊資料）
 export async function loadSuppliers(db, items = []) {
   const snap = await getDocs(collection(db, 'suppliers'));
-  const list = snap.docs.map(d => ({ id: d.id, name: d.data().name || '' })).filter(s => s.name);
+  // off：不送貨的星期（0＝週日 … 6＝週六）；note：最低叫貨量、幾點前要叫等備註
+  const list = snap.docs.map(d => ({ id: d.id, name: d.data().name || '', off: d.data().off || [], note: d.data().note || '' })).filter(s => s.name);
   items.forEach(i => {
-    if (i.supplier && !list.some(s => s.name === i.supplier)) list.push({ id: '', name: i.supplier });
+    if (i.supplier && !list.some(s => s.name === i.supplier)) list.push({ id: '', name: i.supplier, off: [], note: '' });
   });
   return list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
 }
+
+export const WEEKDAYS = '日一二三四五六';
+// 例：「週一休息」「週六、週日休息」；每天都送則回傳空字串
+export const offText = (off) => off?.length ? `週${[...off].sort().map(d => WEEKDAYS[d]).join('、週')}休息` : '';
 
 // 跟廠商叫貨的品項：食材，或有填廠商、沒有配方的成品（例：外購的貢丸）
 export const isPurchased = (i) => !i.internal && (i.kind === '食材' || (!!i.supplier && !i.recipe.length));
