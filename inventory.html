@@ -370,11 +370,10 @@ function stockCard(title, sub) {
     </div>
     ${sub ? `<div class="lab" style="margin-top:-6px;">${escHtml(sub)}</div>` : ''}
     <table>
-      <thead><tr><th>品名</th><th>目前庫存</th><th>安全量</th></tr></thead>
+      <thead><tr><th>品名</th><th>目前庫存</th></tr></thead>
       <tbody>${_items.map(i => `<tr>
         <td>${escHtml(i.name)}</td>
         <td>${isLow(i) ? `<b>${escHtml(qtyText(i, i.stock))}</b>` : `<span style="color:#fff;">${escHtml(qtyText(i, i.stock))}</span>`}</td>
-        <td>${i.safety > 0 ? escHtml(qtyText(i, i.safety)) : '-'}</td>
       </tr>`).join('')}</tbody>
     </table>
     <button class="inv-big go" onclick="copyStock()">複製庫存</button>
