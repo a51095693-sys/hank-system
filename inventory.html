@@ -73,19 +73,27 @@ button.inv-li:hover{background:#FAFBF9}
 .inv-chips{display:flex;gap:8px;overflow-x:auto}
 .inv-chip{height:40px;padding:0 16px;border-radius:999px;border:1px solid #C9CFC9;background:#fff;font-family:inherit;font-size:15px;font-weight:700;white-space:nowrap;cursor:pointer;color:var(--ink)}
 .inv-chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
-.inv-item{display:flex;align-items:center;gap:10px;padding:14px;border-radius:16px;background:#fff;border:2px dashed #C9CFC9;margin-bottom:10px}
+.inv-item{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:14px;border-radius:16px;background:#fff;border:2px dashed #C9CFC9;margin-bottom:10px}
 .inv-item.done{border:1px solid var(--line)}
+.inv-item .info{flex:1 1 120px;min-width:0}
 .inv-item .nm{font-size:19px;font-weight:900;display:flex;align-items:center;gap:6px}
 .inv-item .sp{font-size:13px;color:var(--mute);margin-top:2px}
-.inv-step{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.inv-step{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
 .inv-step button{width:48px;height:48px;border-radius:12px;font-size:26px;font-weight:700;cursor:pointer;font-family:inherit}
 .inv-step .minus{background:#fff;border:1px solid #C9CFC9;color:var(--ink)}
 .inv-step .plus{background:var(--green);border:none;color:#fff}
-.inv-step input{width:60px;height:40px;text-align:center;font-size:24px;font-weight:900;border:none;border-bottom:2px solid transparent;border-radius:0;font-family:inherit;background:none;color:var(--ink);padding:0;-moz-appearance:textfield}
+.inv-num{display:flex;flex-direction:column;align-items:center;gap:2px}
+.inv-step input{width:72px;height:48px;text-align:center;font-size:22px;font-weight:900;border:1.5px solid #C9CFC9;border-radius:12px;font-family:inherit;background:#fff;color:var(--ink);padding:0 4px;-moz-appearance:textfield}
 .inv-step input::-webkit-outer-spin-button,.inv-step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.inv-step input::placeholder{color:var(--ink)}
-.inv-step input:focus{outline:none;border-bottom-color:var(--green)}
+.inv-step input::placeholder{color:#A8B0AA;font-weight:500;font-size:15px}
+.inv-step input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(30,107,71,.15)}
+.inv-step .pk input{width:60px}
+.inv-step .plus-sign{font-size:18px;font-weight:700;color:var(--mute);padding:0 2px 16px}
 .inv-unit{font-size:12px;color:var(--mute);text-align:center}
+.inv-first{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:12px}
+.inv-first h3{font-size:16px;font-weight:700;margin-bottom:4px}
+.inv-first p{font-size:13px;color:var(--mute);margin-bottom:8px}
+.inv-first .list{font-size:15px;color:#3D4741;line-height:1.9}
 .inv-foot{position:sticky;bottom:0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:4px;display:flex;gap:10px}
 .inv-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
 .inv-stats>div{border-radius:14px;padding:12px;background:#fff;border:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
@@ -114,6 +122,13 @@ button.inv-li:hover{background:#FAFBF9}
 .inv-plan .row{display:flex;justify-content:space-between;gap:12px;font-size:16px}
 .inv-plan .row span:last-child{color:#C9D2CC;text-align:right}
 .inv-plan b{color:#F5C04A}
+.inv-plan .hd{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#F5C04A}
+.inv-plan table{width:100%;border-collapse:collapse;font-size:15px}
+.inv-plan th{background:none;border:none;padding:4px 0 6px;font-size:12px;font-weight:500;color:#9AA59F;text-align:right;white-space:nowrap}
+.inv-plan th:first-child,.inv-plan td:first-child{text-align:left}
+.inv-plan td{border:none;border-top:1px solid rgba(255,255,255,.1);padding:8px 0;text-align:right;color:#C9D2CC;white-space:nowrap}
+.inv-plan td:first-child{color:#fff;font-weight:700}
+.inv-plan tr:hover td{background:none}
 .inv-plan .inv-big{height:48px;font-size:16px;border-radius:12px;margin-top:4px}
 #vDone{max-width:640px;margin:0 auto}
 @media(min-width:1000px){
@@ -187,7 +202,7 @@ button.inv-li:hover{background:#FAFBF9}
         <div class="same"><span class="l">相符</span><span class="n" id="dSame">0</span></div>
         <div class="diff"><span class="l">有差異</span><span class="n" id="dDiffN">0</span></div>
       </div>
-      <div id="dHint" style="font-size:14px;color:var(--mute);margin:0 4px 12px;">有差異的品項要選原因才能送出</div>
+      <div id="dHint" style="font-size:14px;color:var(--mute);margin:0 4px 12px;">差異原因可以不選，選了方便日後追查</div>
       <div id="dList"></div>
       <details class="inv-box" id="dSameBox">
         <summary>相符品項（<span id="dSame2">0</span>）</summary>
@@ -303,18 +318,48 @@ window.saveDraft = (notify) => {
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
 
 const isLow = (it) => it.safety > 0 && it.stock < it.safety;
+
+// 與 loadStockItems 相同，另外帶出 counted（是否盤點過）與每箱包數
+async function loadItems() {
+  const [items, snap] = await Promise.all([loadStockItems(db), getDocs(collection(db, 'stockItems'))]);
+  const counted = new Set(snap.docs.filter(d => d.data().lastCountAt).map(d => d.id));
+  return items.map(i => ({ ...i, counted: counted.has(i.id), per: packsPerBox(i) }));
+}
+
+// 單位是「箱」且規格寫「N包／箱」時，盤點改成箱＋包兩格
+function packsPerBox(i) {
+  if (i.unit !== '箱') return 0;
+  const m = /(\d+)\s*包\s*[／/]\s*箱/.exec(i.spec || '');
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// 箱數（可含小數）拆成整箱與零包
+function splitBox(q, per) {
+  const total = Math.round(q * per);
+  return { b: Math.floor(total / per), p: total % per };
+}
+
+// 顯示數量：箱＋包品項顯示「2 箱 3 包」
+function qtyText(i, q) {
+  if (i.per) {
+    const neg = q < 0;
+    const { b, p } = splitBox(Math.abs(q), i.per);
+    return `${neg ? '−' : ''}${b} 箱${p ? ` ${p} 包` : ''}`;
+  }
+  return `${q < 0 ? '−' : ''}${fmtQty(Math.abs(q))} ${i.unit}`;
+}
 const fmtAt = (ts) => ts?.toDate ? ts.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
 
 // ── 1. 首頁 ──
 async function loadHome() {
   show('vHome');
   const now = new Date();
-  document.getElementById('homeWho').textContent = `${_ud.store || '總公司'} · ${_ud.name}`;
+  document.getElementById('homeWho').textContent = `華安央廚 · ${_ud.name}`;
   document.getElementById('homeDay').textContent = `${now.getMonth() + 1}/${now.getDate()}（${'日一二三四五六'[now.getDay()]}）`;
   const body = document.getElementById('homeBody');
   try {
     const [items, snap] = await Promise.all([
-      loadStockItems(db),
+      loadItems(),
       getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(10)))
     ]);
     _items = items;
@@ -334,7 +379,6 @@ async function loadHome() {
   const today = todayStr();
   const doneToday = _recent.find(r => r.date === today && r.type === '成品');
   const draft = readDraft();
-  const low = _items.filter(isLow);
   const nFinished = _items.filter(i => i.kind === '成品').length;
 
   let html = '';
@@ -356,43 +400,52 @@ async function loadHome() {
     </div>`;
   }
 
-  html += `<div class="inv-types">${Object.entries(COUNT_TYPES).map(([k, t]) =>
+  // 沒有品項的盤點類型不顯示（例如尚未建立原物料）
+  const types = Object.entries(COUNT_TYPES).filter(([, t]) => _items.some(i => t.kinds.includes(i.kind)));
+  html += `<div class="inv-types" style="grid-template-columns:repeat(${types.length},minmax(0,1fr));">${types.map(([k, t]) =>
     `<button class="inv-type" onclick="startCount('${k}')">${svg(t.ic, 24, 2, '#1E6B47')}${t.title}</button>`).join('')}</div>`;
 
   html += `<div class="inv-sec">最近盤點</div>`;
   html += _recent.length
     ? `<div class="inv-list">${_recent.map(r => `<button class="inv-li" onclick="openDetail('${r.id}')">
         <div><div class="t">${escHtml(r.date.slice(5).replace('-', '/'))} ${escHtml(r.title)}</div><div class="m">${escHtml(r.by)} · ${fmtAt(r.at)} · ${r.total} 項</div></div>
-        ${r.diffCount ? `<span class="inv-tag diff">差異 ${r.diffCount} 項</span>` : '<span class="inv-tag same">全部相符</span>'}
+        ${recentTag(r)}
       </button>`).join('')}</div>`
     : '<div class="inv-list"><div class="inv-li" style="color:var(--mute);justify-content:center;">尚無盤點紀錄</div></div>';
 
-  let side = '';
-  if (low.length) {
-    side += `<div class="inv-warn"><h3>${svg(IC.warn, 20, 2.2)}低於安全庫存（${low.length} 項）</h3>${low.map(i =>
-      `<div class="row"><span>${escHtml(i.name)}</span><span><b>剩 ${fmtQty(i.stock)} ${escHtml(i.unit)}</b> <small>／ 安全量 ${fmtQty(i.safety)}</small></span></div>`).join('')}</div>`;
-  }
-  side += planCard();
-
-  body.innerHTML = `<div class="inv-home"><div>${html}</div><div>${side}</div></div>`;
+  body.innerHTML = `<div class="inv-home"><div>${html}</div><div>${planCard()}</div></div>`;
 }
 
-// 建議生產量：補足到安全庫存所需的數量
+function recentTag(r) {
+  if (r.diffCount) return `<span class="inv-tag diff">差異 ${r.diffCount} 項</span>`;
+  if (r.firstCount) return `<span class="inv-tag same">首次建檔</span>`;
+  return '<span class="inv-tag same">全部相符</span>';
+}
+
+// 庫存不足＋建議生產量合併成一張卡
 function planCard() {
-  const need = _items.filter(isLow).map(i => ({ ...i, need: Math.round((i.safety - i.stock) * 1000) / 1000 }));
+  const need = _items.filter(isLow);
   if (!need.length) {
-    return `<div class="inv-plan"><div class="lab">建議生產量</div><div class="row"><span>所有品項都在安全庫存以上</span></div></div>`;
+    return `<div class="inv-plan"><div class="lab">庫存狀況</div><div class="row"><span>所有品項都在安全庫存以上</span></div></div>`;
   }
   return `<div class="inv-plan">
-    <div class="lab">建議生產量（補足到安全庫存）</div>
-    ${need.map(i => `<div class="row"><span>${escHtml(i.name)}</span><span>安全 ${fmtQty(i.safety)} · 有 ${fmtQty(i.stock)} · <b>要做 ${fmtQty(i.need)} ${escHtml(i.unit)}</b></span></div>`).join('')}
+    <div class="hd">${svg(IC.warn, 20, 2.2)}庫存不足（${need.length} 項）</div>
+    <table>
+      <thead><tr><th>品名</th><th>目前</th><th>安全量</th><th>建議生產</th></tr></thead>
+      <tbody>${need.map(i => `<tr>
+        <td>${escHtml(i.name)}</td>
+        <td>${escHtml(qtyText(i, i.stock))}</td>
+        <td>${escHtml(qtyText(i, i.safety))}</td>
+        <td><b>${escHtml(qtyText(i, i.safety - i.stock))}</b></td>
+      </tr>`).join('')}</tbody>
+    </table>
     <button class="inv-big go" onclick="copyPlan()">複製生產單</button>
   </div>`;
 }
 
 window.copyPlan = async () => {
   const now = new Date();
-  const lines = _items.filter(isLow).map(i => `・${i.name}：${fmtQty(Math.round((i.safety - i.stock) * 1000) / 1000)} ${i.unit}`);
+  const lines = _items.filter(isLow).map(i => `・${i.name}：${qtyText(i, i.safety - i.stock)}`);
   const text = `【生產單】${now.getMonth() + 1}/${now.getDate()}\n${lines.join('\n')}`;
   try {
     await navigator.clipboard.writeText(text);
@@ -409,13 +462,17 @@ window.openDetail = (id) => {
   if (!r) return;
   document.getElementById('detTitle').textContent = `${r.date} ${r.title}`;
   document.getElementById('detMeta').textContent = `${r.by}・${fmtAt(r.at)}・共 ${r.total} 項，差異 ${r.diffCount} 項`;
-  document.getElementById('detTable').innerHTML = (r.items || []).map(x => `<tr>
+  document.getElementById('detTable').innerHTML = (r.items || []).map(x => {
+    const u = _items.find(i => i.id === x.id) || x;
+    const diffText = x.first ? '首次建檔' : (x.diff ? `${x.diff > 0 ? '+' : ''}${qtyText(u, x.diff)}` : '相符');
+    return `<tr>
     <td data-label="品名" style="font-weight:700;">${escHtml(x.name)}</td>
-    <td data-label="系統">${fmtQty(x.system)} ${escHtml(x.unit)}</td>
-    <td data-label="實盤">${fmtQty(x.counted)} ${escHtml(x.unit)}</td>
-    <td data-label="差異" style="font-weight:700;color:${x.diff ? '#9A3412' : 'var(--success)'};">${x.diff > 0 ? '+' : ''}${x.diff ? fmtQty(x.diff) : '相符'}</td>
-    <td data-label="原因">${escHtml(x.reason) || '-'}</td>
-  </tr>`).join('');
+    <td data-label="系統">${x.first ? '-' : escHtml(qtyText(u, x.system))}</td>
+    <td data-label="實盤">${escHtml(qtyText(u, x.counted))}</td>
+    <td data-label="差異" style="font-weight:700;color:${x.diff && !x.first ? '#9A3412' : 'var(--success)'};">${escHtml(diffText)}</td>
+    <td data-label="原因">${x.first ? '-' : (escHtml(x.reason) || '-')}</td>
+  </tr>`;
+  }).join('');
   document.getElementById('detailModal').classList.add('open');
 };
 
@@ -464,20 +521,54 @@ function renderCount() {
   document.getElementById('cList').innerHTML = shown.length ? shown.map(i => {
     const v = _cur.counts[i.id];
     const has = v !== undefined;
+    const name = escHtml(i.name);
+    const keys = `onfocus="this.select()" onkeydown="nextOnEnter(event)"`;
+    let inputs;
+    if (i.per) {
+      const { b, p } = has ? splitBox(v, i.per) : { b: '', p: '' };
+      inputs = `<div class="inv-num"><input type="number" inputmode="numeric" min="0" step="1" value="${b}" placeholder="0" aria-label="${name} 箱數" data-box ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">箱</div></div>
+        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加一箱">+</button>
+        <span class="plus-sign">＋</span>
+        <div class="inv-num pk"><input type="number" inputmode="numeric" min="0" step="1" value="${p}" placeholder="0" aria-label="${name} 零包數" data-pk ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">包</div></div>`;
+    } else {
+      inputs = `<div class="inv-num"><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="點我輸入" aria-label="${name} 數量" ${keys} onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
+        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>`;
+    }
     return `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
-      <div style="flex:1;min-width:0;">
-        <div class="nm">${escHtml(i.name)}${has ? CHECK_MARK : ''}</div>
+      <div class="info">
+        <div class="nm">${name}${has ? CHECK_MARK : ''}</div>
         <div class="sp">${escHtml(i.category || '未分類')}${i.spec ? '・' + escHtml(i.spec) : ''}</div>
       </div>
       <div class="inv-step">
-        <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少">−</button>
-        <div><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="—" aria-label="${escHtml(i.name)} 數量" onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
-        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>
+        <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少${i.per ? '一箱' : ''}">−</button>
+        ${inputs}
       </div>
     </div>`;
   }).join('') : '<div class="card text-muted text-center">這個分類沒有品項</div>';
   updateProgress();
 }
+
+// 按 Enter 跳到下一格輸入框
+window.nextOnEnter = (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const all = [...document.querySelectorAll('#cList input')];
+  const next = all[all.indexOf(e.target) + 1];
+  e.target.blur();
+  if (next) next.focus();
+};
+
+// 箱＋包品項：兩格合併成箱數（例：2 箱 3 包、每箱 7 包 → 2.428… 箱）
+window.setBox = (id) => {
+  const it = _items.find(i => i.id === id);
+  const row = document.getElementById('row-' + id);
+  if (!it || !row) return;
+  const bs = row.querySelector('[data-box]').value, ps = row.querySelector('[data-pk]').value;
+  if (bs === '' && ps === '') { setQty(id, ''); return; }
+  const b = parseFloat(bs) || 0, p = parseFloat(ps) || 0;
+  if (b < 0 || p < 0) { showToast('請輸入 0 以上的數字', 'error'); renderCount(); return; }
+  setQty(id, String(b + p / it.per));
+};
 
 function updateProgress() {
   const list = countItems();
@@ -491,7 +582,9 @@ window.pickCat = (c) => { _cur.cat = c; renderCount(); };
 
 window.bump = (id, d) => {
   const cur = _cur.counts[id];
-  _cur.counts[id] = Math.max(0, Math.round(((cur === undefined ? 0 : cur) + d) * 1000) / 1000);
+  const per = _items.find(i => i.id === id)?.per;
+  const n = (cur === undefined ? 0 : cur) + d;
+  _cur.counts[id] = Math.max(0, per ? n : Math.round(n * 1000) / 1000);
   saveDraft(false);
   renderCount();
 };
@@ -532,67 +625,89 @@ window.goDiff = async () => {
   // 重新讀取庫存，避免盤點期間有人登記異動
   const btn = document.getElementById('cNextBtn');
   btn.disabled = true; btn.textContent = '計算中…';
-  try { _items = await loadStockItems(db); }
+  try { _items = await loadItems(); }
   catch (e) { showToast('讀取庫存失敗，請重試', 'error'); return; }
   finally { btn.disabled = false; btn.textContent = '下一步：核對差異'; }
 
-  _rows = countItems().filter(i => _cur.counts[i.id] !== undefined).map(i => ({
-    id: i.id, name: i.name, unit: i.unit,
-    system: i.stock, counted: _cur.counts[i.id],
-    diff: Math.round((_cur.counts[i.id] - i.stock) * 1000) / 1000
-  }));
+  // 從沒盤點過的品項系統數量不可信，視為「首次建檔」，不算差異
+  _rows = countItems().filter(i => _cur.counts[i.id] !== undefined).map(i => {
+    const diff = Math.round((_cur.counts[i.id] - i.stock) * 10000) / 10000;
+    return {
+      id: i.id, name: i.name, unit: i.unit, per: i.per,
+      system: i.stock, counted: _cur.counts[i.id],
+      first: !i.counted, diff: Math.abs(diff) < 0.0001 ? 0 : diff
+    };
+  });
   renderDiff();
   show('vDiff');
 };
 
 function renderDiff() {
-  const diffs = _rows.filter(r => r.diff !== 0);
-  const same = _rows.filter(r => r.diff === 0);
+  const firsts = _rows.filter(r => r.first);
+  const diffs = _rows.filter(r => !r.first && r.diff !== 0);
+  const same = _rows.filter(r => !r.first && r.diff === 0);
   document.getElementById('dTotal').textContent = _rows.length;
   document.getElementById('dSame').textContent = same.length;
   document.getElementById('dSame2').textContent = same.length;
   document.getElementById('dDiffN').textContent = diffs.length;
   document.getElementById('dHint').classList.toggle('hidden', !diffs.length);
   document.getElementById('dSameBox').classList.toggle('hidden', !same.length);
-  document.getElementById('dSameList').innerHTML = same.map(r => `${escHtml(r.name)} ${fmtQty(r.counted)} ${escHtml(r.unit)}`).join(' · ');
-  document.getElementById('dList').innerHTML = diffs.length ? diffs.map(r => `<div class="inv-diff">
-    <div class="top"><span class="nm">${escHtml(r.name)}</span><span class="delta">${r.diff > 0 ? '+' : '−'}${fmtQty(Math.abs(r.diff))} ${escHtml(r.unit)}</span></div>
+  document.getElementById('dSameList').innerHTML = same.map(r => escHtml(`${r.name} ${qtyText(r, r.counted)}`)).join(' · ');
+  const firstBox = firsts.length ? `<div class="inv-first" style="grid-column:1/-1;">
+    <h3>首次建檔（${firsts.length} 項）</h3>
+    <p>這些品項第一次盤點，直接以實盤數量作為庫存，不用填原因。</p>
+    <div class="list">${firsts.map(r => escHtml(`${r.name} ${qtyText(r, r.counted)}`)).join(' · ')}</div>
+  </div>` : '';
+  const diffCards = diffs.map(r => `<div class="inv-diff">
+    <div class="top"><span class="nm">${escHtml(r.name)}</span><span class="delta">${r.diff > 0 ? '+' : ''}${escHtml(qtyText(r, r.diff))}</span></div>
     <div class="inv-cmp">
-      <div><div class="l">系統應有</div><div class="v">${fmtQty(r.system)} ${escHtml(r.unit)}</div></div>
-      <div><div class="l">實際盤點</div><div class="v">${fmtQty(r.counted)} ${escHtml(r.unit)}</div></div>
+      <div><div class="l">系統應有</div><div class="v">${escHtml(qtyText(r, r.system))}</div></div>
+      <div><div class="l">實際盤點</div><div class="v">${escHtml(qtyText(r, r.counted))}</div></div>
     </div>
     <div class="inv-reasons">${REASONS.map(rs =>
       `<button class="inv-reason${_cur.reasons[r.id] === rs ? ' on' : ''}" onclick="pickReason('${r.id}','${rs}')">${rs}</button>`).join('')}</div>
-  </div>`).join('') : `<div class="inv-box" style="display:flex;align-items:center;justify-content:center;gap:8px;color:var(--green);font-weight:700;">${CHECK_MARK}全部品項與系統相符</div>`;
+  </div>`).join('');
+  document.getElementById('dList').innerHTML = (firstBox + diffCards) ||
+    `<div class="inv-box" style="display:flex;align-items:center;justify-content:center;gap:8px;color:var(--green);font-weight:700;">${CHECK_MARK}全部品項與系統相符</div>`;
   updateSubmit();
 }
 
-window.pickReason = (id, rs) => { _cur.reasons[id] = rs; saveDraft(false); renderDiff(); };
+// 原因選填：再點一次同一個原因可取消
+window.pickReason = (id, rs) => {
+  if (_cur.reasons[id] === rs) delete _cur.reasons[id]; else _cur.reasons[id] = rs;
+  saveDraft(false);
+  renderDiff();
+};
 
 function updateSubmit() {
-  const left = _rows.filter(r => r.diff !== 0 && !_cur.reasons[r.id]).length;
   const btn = document.getElementById('dSubmitBtn');
-  btn.disabled = left > 0;
-  btn.textContent = left > 0 ? `還有 ${left} 項未選原因` : '送出盤點';
+  btn.disabled = false;
+  btn.textContent = '送出盤點';
 }
 
 window.submitCount = async () => {
   const btn = document.getElementById('dSubmitBtn');
   btn.disabled = true; btn.textContent = '送出中…';
   const t = COUNT_TYPES[_cur.type];
-  const items = _rows.map(r => ({ ...r, reason: r.diff !== 0 ? _cur.reasons[r.id] : '' }));
-  const diffCount = items.filter(r => r.diff !== 0).length;
+  const items = _rows.map(({ per, ...r }) => ({
+    ...r, reason: r.first ? '首次建檔' : (r.diff !== 0 ? (_cur.reasons[r.id] || '') : '')
+  }));
+  const diffCount = items.filter(r => !r.first && r.diff !== 0).length;
+  const firstCount = items.filter(r => r.first).length;
   try {
     const batch = writeBatch(db);
     const countRef = doc(collection(db, 'stockCounts'));
     batch.set(countRef, {
       date: todayStr(), type: _cur.type, title: t.title,
-      by: _ud.name, at: serverTimestamp(), total: items.length, diffCount, items
+      by: _ud.name, at: serverTimestamp(), total: items.length, diffCount, firstCount, items
     });
-    items.filter(r => r.diff !== 0).forEach(r => {
-      batch.update(doc(db, 'stockItems', r.id), { stock: r.counted });
+    items.forEach(r => {
+      batch.update(doc(db, 'stockItems', r.id), r.diff !== 0
+        ? { stock: r.counted, lastCountAt: serverTimestamp() }
+        : { lastCountAt: serverTimestamp() });
+      if (r.diff === 0) return;
       batch.set(doc(collection(db, 'stockMoves')), {
-        itemId: r.id, itemName: r.name, unit: r.unit, type: '盤點調整',
+        itemId: r.id, itemName: r.name, unit: r.unit, type: r.first ? '首次建檔' : '盤點調整',
         qty: r.diff, before: r.system, after: r.counted, note: r.reason,
         countId: countRef.id, by: _ud.name, at: serverTimestamp()
       });
@@ -604,13 +719,13 @@ window.submitCount = async () => {
     return;
   }
   clearDraft();
-  items.forEach(r => { const it = _items.find(i => i.id === r.id); if (it) it.stock = r.counted; });
-  renderDone(t, items, diffCount);
+  items.forEach(r => { const it = _items.find(i => i.id === r.id); if (it) { it.stock = r.counted; it.counted = true; } });
+  renderDone(t, items, diffCount, firstCount);
   show('vDone');
 };
 
 // ── 4. 完成 ──
-function renderDone(t, items, diffCount) {
+function renderDone(t, items, diffCount, firstCount) {
   const now = new Date().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
   let took = '';
   if (_cur.startedAt) {
@@ -618,17 +733,18 @@ function renderDone(t, items, diffCount) {
     took = ` · 用時 ${sec >= 60 ? Math.floor(sec / 60) + ' 分 ' : ''}${sec % 60} 秒`;
   }
   document.getElementById('doneMeta').textContent = `${t.title} · ${now} · ${_ud.name}${took}`;
-  const low = _items.filter(isLow);
-  const diffs = items.filter(r => r.diff !== 0);
+  const diffs = items.filter(r => !r.first && r.diff !== 0);
+  const unitOf = (r) => _items.find(i => i.id === r.id) || r;
   const row = (tone, icon, title, sub) => `<div class="inv-li" style="justify-content:flex-start;">
     <div class="inv-ico ${tone}">${svg(icon, 22, 2.2)}</div>
     <div><div class="t">${title}</div><div class="m">${sub}</div></div></div>`;
   let html = row('ok', IC.box, '庫存已更新', `${items.length} 個品項以實盤數量為準`);
-  html += diffCount
-    ? row('warn', IC.note, `差異 ${diffCount} 項已記錄`, diffs.map(r => `${escHtml(r.name)} ${r.diff > 0 ? '+' : '−'}${fmtQty(Math.abs(r.diff))} ${escHtml(r.unit)}（${escHtml(r.reason)}）`).join(' · '))
-    : row('ok', IC.check, '全部相符', '沒有任何差異');
-  if (low.length) {
-    html += row('warn', IC.warn, `${low.length} 項低於安全庫存`, low.map(i => `${escHtml(i.name)} 剩 ${fmtQty(i.stock)} ${escHtml(i.unit)}`).join(' · '));
+  if (firstCount) html += row('ok', IC.note, `首次建檔 ${firstCount} 項`, '第一次盤點的品項，已直接建立庫存');
+  if (diffCount) {
+    html += row('warn', IC.note, `差異 ${diffCount} 項已記錄`, diffs.map(r =>
+      escHtml(`${r.name} ${r.diff > 0 ? '+' : ''}${qtyText(unitOf(r), r.diff)}${r.reason ? `（${r.reason}）` : ''}`)).join(' · '));
+  } else if (!firstCount) {
+    html += row('ok', IC.check, '全部相符', '沒有任何差異');
   }
   document.getElementById('doneList').innerHTML = html;
   document.getElementById('donePlan').innerHTML = planCard();
