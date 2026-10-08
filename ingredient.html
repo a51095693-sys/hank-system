@@ -93,8 +93,12 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
       <div style="grid-column:1/-1;"><label class="form-label">食材名稱 *</label><input type="text" class="form-control" id="iName" placeholder="例如：醬油"></div>
       <div style="grid-column:1/-1;"><label class="form-label">廠商</label><input type="text" class="form-control" id="iSupplier" list="supList" placeholder="從名單選，或打新廠商" autocomplete="off"><datalist id="supList"></datalist></div>
-      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="件、包、桶…"></div>
+      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="件、包、桶…" oninput="document.getElementById('iCattyUnit').textContent = this.value.trim() || '單位'"></div>
       <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：12瓶／箱"></div>
+      <div style="grid-column:1/-1;"><label class="form-label">台斤換算（選填，配方要用台斤／兩時才需要）</label>
+        <div class="flex gap-2 items-center"><span style="font-size:14px;white-space:nowrap;">1 <span id="iCattyUnit">單位</span> ＝</span>
+          <input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iCatty" placeholder="例如：18" style="width:120px;">
+          <span style="font-size:14px;">台斤</span></div></div>
       <div><label class="form-label">預留量</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="至少要留多少"></div>
       <div id="iStockWrap"><label class="form-label">目前庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
     </div>
@@ -150,7 +154,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers } from "./app.js?v=20261008f";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty } from "./app.js?v=20261008g";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -245,7 +249,7 @@ function rowHtml(i, withSup) {
   return `<tr>
     <td data-label="品名" style="font-weight:700;">${escHtml(i.name)}${isIng ? '' : '<span class="sp-tag">成品</span>'}</td>
     ${withSup ? `<td data-label="廠商" style="font-size:12px;color:var(--text2);">${escHtml(i.supplier || NO_SUP)}</td>` : ''}
-    <td data-label="規格" style="font-size:12px;color:var(--text2);">${escHtml(i.spec) || '-'}</td>
+    <td data-label="規格" style="font-size:12px;color:var(--text2);">${escHtml(i.spec) || '-'}${i.catty > 0 ? `<div>1 ${escHtml(i.unit)} = ${fmtQty(i.catty)} 台斤</div>` : ''}</td>
     <td data-label="預留量" style="color:var(--text2);">${i.safety > 0 ? escHtml(qtyText(i, i.safety)) : '-'}</td>
     <td data-label="目前庫存" style="font-weight:700;">${escHtml(qtyText(i, i.stock))}</td>
     <td data-label="用在" style="font-size:12px;color:var(--text2);white-space:normal;">${isIng ? (used.length ? escHtml(used.join('、')) : '<span class="sp-warn">還沒用在配方</span>') : '（直接出給店面）'}</td>
@@ -313,6 +317,8 @@ window.openItem = (id, supIdx) => {
   document.getElementById('supList').innerHTML = _sups.map(sp => `<option value="${escHtml(sp.name)}"></option>`).join('');
   document.getElementById('iUnit').value = it ? it.unit : '';
   document.getElementById('iSpec').value = it ? it.spec : '';
+  document.getElementById('iCatty').value = it && it.catty > 0 ? it.catty : '';
+  document.getElementById('iCattyUnit').textContent = it ? it.unit : '單位';
   document.getElementById('iSafety').value = it && it.safety > 0 ? it.safety : '';
   document.getElementById('iStock').value = '';
   // 已建立的食材庫存由盤點或「進貨」更新，保留紀錄
@@ -341,6 +347,7 @@ window.saveItem = async () => {
   const data = {
     name, unit,
     supplier,
+    catty: Math.max(0, parseFloat(document.getElementById('iCatty').value) || 0),
     spec: document.getElementById('iSpec').value.trim(),
     safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
   };

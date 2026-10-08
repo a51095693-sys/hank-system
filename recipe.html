@@ -41,6 +41,9 @@
 .rc-tbl input{width:110px;font-size:16px}
 .rc-tbl tr:hover td{background:none}
 .rc-u{font-size:13px;color:var(--text2);white-space:nowrap}
+.rc-tbl select.unit{width:auto;min-width:84px}
+.rc-conv{font-size:12px;color:#1E6B47;white-space:nowrap}
+.rc-conv.warn{color:var(--danger);white-space:normal}
 .rc-empty{font-size:14px;color:var(--text3);padding:18px 4px}
 .rc-info{font-size:14px;color:var(--text2);background:var(--surface2);border-radius:12px;padding:14px 16px;line-height:1.7}
 .rc-used{font-size:12px;color:var(--text2);margin-top:12px}
@@ -89,7 +92,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased } from "./app.js?v=20261008f";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased, recipeQty, qtyText, fmtQty, WEIGHT_UNITS } from "./app.js?v=20261008g";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -109,7 +112,8 @@ let _sel = (() => { try { return localStorage.getItem(SEL_KEY) || ''; } catch (e
 const byId = (id) => _items.find(i => i.id === id);
 // 內部使用的品項不需要配方，不列出
 const products = () => _items.filter(i => i.kind === '成品' && !i.internal);
-const materials = () => _items.filter(i => i.kind === '食材');
+// 材料：食材，加上內部使用的品項（例：好吃醬會用到煮雞產出的雞油）
+const materials = () => _items.filter(i => i.kind === '食材' || i.internal);
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
@@ -129,12 +133,28 @@ async function loadAll() {
   catch (e) { document.getElementById('rcMain').innerHTML = '<div class="text-muted">載入失敗，請重新整理</div>'; return; }
   _edit = {};
   _yield = {};
-  products().forEach(i => { _edit[i.id] = i.recipe.map(r => ({ ...r })); _yield[i.id] = String(i.yield); });
+  products().forEach(i => { _edit[i.id] = toRows(i); _yield[i.id] = String(i.yield); });
   render();
 }
 
-const cleanRecipe = (rows) => rows.filter(r => r.id && Number(r.qty) > 0).map(r => ({ id: r.id, qty: Number(r.qty) }));
-const isDirty = (it) => _edit[it.id] && (JSON.stringify(_edit[it.id].map(r => ({ id: r.id, qty: Number(r.qty) || 0 }))) !== JSON.stringify(it.recipe) || Number(_yield[it.id]) !== it.yield);
+// 編輯用的每一行：{ id, amt, u }，u 為空代表材料本身的單位
+const toRows = (it) => it.recipe.map(r => ({ id: r.id, amt: String(r.amt), u: r.u }));
+const sig = (rows) => JSON.stringify(rows.map(r => ({ id: r.id, amt: Number(r.amt) || 0, u: r.u || '' })));
+// 存檔格式：用量、單位，以及換算成材料單位的 qty
+const cleanRecipe = (rows) => rows.filter(r => r.id && Number(r.amt) > 0).map(r => {
+  const line = { id: r.id, amt: Number(r.amt), u: r.u || '' };
+  return { ...line, qty: recipeQty(line, byId(r.id)) };
+});
+const isDirty = (it) => _edit[it.id] && (sig(_edit[it.id]) !== sig(toRows(it)) || Number(_yield[it.id]) !== it.yield);
+
+// 用台斤／兩時顯示換算結果；材料沒設換算時提示
+function convText(r) {
+  const c = byId(r.id);
+  if (!c || !r.u) return '';
+  if (!(c.catty > 0)) return `<span class="rc-conv warn">「${escHtml(c.label)}」還沒設定 1 ${escHtml(c.unit)} 是幾台斤</span>`;
+  const amt = Number(r.amt);
+  return amt > 0 ? `<span class="rc-conv">≈ ${escHtml(qtyText(c, recipeQty({ amt, u: r.u }, c)))}</span>` : '';
+}
 const usedBy = (id) => _items.filter(i => i.recipe.some(r => r.id === id)).map(i => i.label);
 
 function status(it) {
@@ -172,7 +192,7 @@ function renderMain() {
 
   const mats = materials();
   const body = rows.length ? `<div class="table-wrap"><table class="rc-tbl">
-      <thead><tr><th>食材</th><th>用量</th><th>單位</th><th></th></tr></thead>
+      <thead><tr><th>食材</th><th>用量</th><th>單位</th><th>換算</th><th></th></tr></thead>
       <tbody>${rows.map((r, i) => {
         const c = byId(r.id);
         return `<tr>
@@ -180,8 +200,12 @@ function renderMain() {
             <option value="">選擇食材</option>
             ${mats.map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}
           </select></td>
-          <td data-label="數量"><input type="number" min="0" step="any" inputmode="decimal" class="form-control" aria-label="第 ${i + 1} 項數量" placeholder="數量" value="${r.qty || ''}" oninput="setLine(${i}, 'qty', this.value)"></td>
-          <td data-label="單位" class="rc-u">${c ? escHtml(c.unit) : '-'}</td>
+          <td data-label="用量"><input type="number" min="0" step="any" inputmode="decimal" class="form-control" aria-label="第 ${i + 1} 項用量" placeholder="用量" value="${r.amt || ''}" oninput="setLine(${i}, 'amt', this.value)"></td>
+          <td data-label="單位"><select class="form-control unit" aria-label="第 ${i + 1} 項單位" onchange="setLine(${i}, 'u', this.value)" ${c ? '' : 'disabled'}>
+            <option value="" ${!r.u ? 'selected' : ''}>${c ? escHtml(c.unit) : '-'}</option>
+            ${WEIGHT_UNITS.map(w => `<option value="${w}" ${r.u === w ? 'selected' : ''}>${w}</option>`).join('')}
+          </select></td>
+          <td data-label="換算" id="conv-${i}">${convText(r)}</td>
           <td><button type="button" class="btn btn-sm btn-outline" aria-label="移除第 ${i + 1} 項" onclick="removeLine(${i})">✕</button></td>
         </tr>`;
       }).join('')}</tbody>
@@ -208,13 +232,15 @@ window.pick = (id) => {
   try { localStorage.setItem(SEL_KEY, id); } catch (e) {}
   render();
 };
-window.addLine = () => { _edit[_sel].push({ id: '', qty: '' }); render(); };
+window.addLine = () => { _edit[_sel].push({ id: '', amt: '', u: '' }); render(); };
 window.removeLine = (i) => { _edit[_sel].splice(i, 1); render(); };
-window.resetLines = () => { const it = byId(_sel); _edit[_sel] = it.recipe.map(r => ({ ...r })); _yield[_sel] = String(it.yield); render(); };
+window.resetLines = () => { const it = byId(_sel); _edit[_sel] = toRows(it); _yield[_sel] = String(it.yield); render(); };
 window.setYield = (v) => { _yield[_sel] = v; refreshDirty(); };
 window.setLine = (i, key, v) => {
   _edit[_sel][i][key] = v;
-  if (key === 'id') { render(); return; }
+  if (key === 'id' || key === 'u') { render(); return; }
+  const cv = document.getElementById('conv-' + i);
+  if (cv) cv.innerHTML = convText(_edit[_sel][i]);
   refreshDirty();
 };
 
@@ -234,8 +260,10 @@ window.saveRecipe = async () => {
   const rows = _edit[_sel];
   const yieldQty = Number(_yield[_sel]);
   if (!(yieldQty > 0)) { showToast('「可以做出」的數量要大於 0', 'error'); return; }
-  if (rows.some(r => r.id && !(Number(r.qty) > 0))) { showToast('食材用量要大於 0', 'error'); return; }
-  if (rows.some(r => !r.id && Number(r.qty) > 0)) { showToast('有數量但沒選食材', 'error'); return; }
+  if (rows.some(r => r.id && !(Number(r.amt) > 0))) { showToast('食材用量要大於 0', 'error'); return; }
+  if (rows.some(r => !r.id && Number(r.amt) > 0)) { showToast('有用量但沒選食材', 'error'); return; }
+  const noCatty = rows.find(r => r.id && r.u && !(byId(r.id)?.catty > 0));
+
   const recipe = cleanRecipe(rows);
   const ids = recipe.map(r => r.id);
   if (new Set(ids).size !== ids.length) { showToast('同一個食材重複了，請合併成一行', 'error'); return; }
@@ -248,7 +276,8 @@ window.saveRecipe = async () => {
     it.yield = yieldQty;
     _edit[it.id] = recipe.map(r => ({ ...r }));
     _yield[it.id] = String(yieldQty);
-    showToast(`「${it.label}」配方已儲存`, 'success');
+    // 用台斤／兩但材料還沒設換算時可以先存，換算設好後叫貨計算才會算進去
+    showToast(noCatty ? `已儲存；「${byId(noCatty.id).label}」設好台斤換算後才會算進叫貨` : `「${it.label}」配方已儲存`, 'success');
     render();
   } catch (e) {
     showToast('儲存失敗，請重試', 'error');

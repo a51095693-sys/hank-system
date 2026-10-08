@@ -99,8 +99,12 @@
         <input type="checkbox" id="iInternal" style="margin-top:3px;cursor:pointer;">
         <span><strong>內部使用</strong><br><span style="color:var(--text2);">只在盤點時出現，不出現在叫貨計算，也不需要設定配方（例：煮雞產出的雞油）</span></span>
       </label>
-      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="盤、包、鍋…"></div>
+      <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="盤、包、鍋…" oninput="document.getElementById('iCattyUnit').textContent = this.value.trim() || '單位'"></div>
       <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：10份／盤"></div>
+      <div style="grid-column:1/-1;"><label class="form-label">台斤換算（選填，配方要用台斤／兩時才需要）</label>
+        <div class="flex gap-2 items-center"><span style="font-size:14px;white-space:nowrap;">1 <span id="iCattyUnit">單位</span> ＝</span>
+          <input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iCatty" placeholder="例如：18" style="width:120px;">
+          <span style="font-size:14px;">台斤</span></div></div>
       <div><label class="form-label">安全庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="低於此數提醒"></div>
       <div id="iStockWrap"><label class="form-label">期初庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
       <div id="iStockHint" class="hidden" style="grid-column:1/-1;font-size:12px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:8px 10px;"></div>
@@ -180,7 +184,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers } from "./app.js?v=20261008f";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261008g";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -273,7 +277,7 @@ window.renderTable = () => {
 
 const nameOf = (id) => _items.find(x => x.id === id);
 function recipeText(it) {
-  return it.recipe.map(r => { const c = nameOf(r.id); return c ? `${c.label} ${qtyText(c, r.qty)}` : ''; }).filter(Boolean).join('、');
+  return it.recipe.map(r => { const c = nameOf(r.id); return c ? `${c.label} ${recipeAmtText(r, c)}` : ''; }).filter(Boolean).join('、');
 }
 
 function rowHtml(it) {
@@ -338,6 +342,8 @@ window.openItem = (id) => {
   document.getElementById('iErr').classList.add('hidden');
   document.getElementById('iSupplier').value = it ? it.supplier : '';
   document.getElementById('iInternal').checked = it ? it.internal : false;
+  document.getElementById('iCatty').value = it && it.catty > 0 ? it.catty : '';
+  document.getElementById('iCattyUnit').textContent = it ? it.unit : '單位';
   loadSuppliers(db, _items).then(list => {
     document.getElementById('supList').innerHTML = list.map(sp => `<option value="${escHtml(sp.name)}"></option>`).join('');
   }).catch(() => {});
@@ -370,7 +376,8 @@ window.saveItem = async () => {
   if (dup) return;
   // 配方在「配方設定」頁編輯；改成食材時清掉配方（食材是買來的）
   const data = {
-    name, unit, kind: _kind, supplier, internal: document.getElementById('iInternal').checked, ...(_kind === '食材' ? { recipe: [] } : {}),
+    name, unit, kind: _kind, supplier, internal: document.getElementById('iInternal').checked,
+    catty: Math.max(0, parseFloat(document.getElementById('iCatty').value) || 0), ...(_kind === '食材' ? { recipe: [] } : {}),
     spec: document.getElementById('iSpec').value.trim(),
     safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
   };

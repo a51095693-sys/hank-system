@@ -3,6 +3,21 @@ import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/fireba
 
 export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福','新莊'];
 
+// 配方可用的重量單位（1 台斤 = 16 兩）
+export const WEIGHT_UNITS = ['台斤', '兩'];
+
+// 配方一行換算成材料本身單位的數量；用台斤／兩但材料沒設換算時，沿用上次儲存的數量
+export function recipeQty(r, material) {
+  if (!r.u) return r.amt;
+  const catty = r.u === '台斤' ? r.amt : r.amt / 16;
+  return material?.catty > 0 ? catty / material.catty : (r.qty || 0);
+}
+
+// 配方一行的顯示文字，例：「2.5 台斤」「0.5 桶」
+export function recipeAmtText(r, material) {
+  return r.u ? `${fmtQty(r.amt)} ${r.u}` : qtyText(material || { unit: '' }, r.amt);
+}
+
 // 成品：店面叫貨的品項；食材：向廠商叫貨
 // 「半成品」已停用：資料保留在資料庫，但 loadStockItems 不回傳，所有畫面都不顯示
 export const KINDS = ['成品', '食材'];
@@ -15,10 +30,12 @@ export async function loadStockItems(db) {
     .map(d => {
       const e = d.data();
       const kind = e.kind === '原物料' ? '食材' : (KINDS.includes(e.kind) ? e.kind : '成品');
-      // 配方：每 1 單位本品項需要的其他品項數量 [{ id, qty }]
+      // 配方：一批要用的材料 [{ id, amt, u, qty }]
+      //   amt + u：輸入的用量與單位（u 為空＝材料本身的單位，或「台斤」「兩」）
+      //   qty：換算成材料本身單位的數量（下面依材料的台斤換算重新計算）
       const recipe = (Array.isArray(e.recipe) ? e.recipe : [])
-        .filter(r => r && r.id && Number(r.qty) > 0)
-        .map(r => ({ id: r.id, qty: Number(r.qty) }));
+        .filter(r => r && r.id && Number(r.amt ?? r.qty) > 0)
+        .map(r => ({ id: r.id, amt: Number(r.amt ?? r.qty), u: WEIGHT_UNITS.includes(r.u) ? r.u : '', qty: Number(r.qty) || 0 }));
       const item = {
         id: d.id, name: e.name || '', kind, category: e.category || '',
         unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
@@ -27,14 +44,18 @@ export async function loadStockItems(db) {
         yield: Number(e.yield) > 0 ? Number(e.yield) : 1,
         supplier: e.supplier || '',
         // 內部使用：只出現在盤點，不出現在叫貨計算、不需要配方（例：煮雞產出的雞油）
-        internal: !!e.internal
+        internal: !!e.internal,
+        // 台斤換算：1 單位（桶、箱…）等於幾台斤；0 表示未設定
+        catty: Number(e.catty) > 0 ? Number(e.catty) : 0
       };
       return { ...item, ...subUnit(item) };
     })
-    // 不同廠商可以有同名品項；同名時顯示名稱加上廠商以便區分（label）
     .map((i, _, all) => ({
       ...i,
-      label: i.supplier && all.some(o => o.id !== i.id && o.name === i.name) ? `${i.name}（${i.supplier}）` : i.name
+      // 不同廠商可以有同名品項；同名時顯示名稱加上廠商以便區分（label）
+      label: i.supplier && all.some(o => o.id !== i.id && o.name === i.name) ? `${i.name}（${i.supplier}）` : i.name,
+      // 以材料目前的台斤換算重新算出用量，換算改了配方會自動跟著變
+      recipe: i.recipe.map(r => ({ ...r, qty: recipeQty(r, all.find(o => o.id === r.id)) }))
     }))
     .sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
 }
