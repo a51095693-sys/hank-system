@@ -213,8 +213,7 @@ window.saveOrder = async () => {
 };
 
 // ── 計算 ──
-// 從成品往下展開配方：每一層先扣掉現有庫存，不夠的才往下推算材料；
-// 跟廠商叫的品項（食材、外購成品）另外補足到安全庫存當作預留。
+// 從成品往下展開配方：每一層都補足到安全庫存，扣掉現有庫存，不夠的才往下推算材料。
 function plan() {
   const demand = {};
   Object.entries(_qty).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
@@ -240,8 +239,10 @@ function plan() {
       if (q > 1e-9) buy.push({ it, need, q });
       return;
     }
-    const q = Math.max(0, need - it.stock);
-    if (q <= 1e-9) return;
+    // 自己做的成品也要做到補足安全庫存，數量無條件進位
+    const raw = need + it.safety - it.stock;
+    if (raw <= 1e-9) return;
+    const q = roundUp(it, raw);
     make.push({ it, need, q, noRecipe: !it.recipe.length && !it.byproduct });
     it.recipe.forEach(r => { if (r.id) demand[r.id] = (demand[r.id] || 0) + q * r.qty / it.yield; });
   });
@@ -264,6 +265,7 @@ function renderResult() {
     <td>${escHtml(m.it.label)}${m.it.byproduct ? `<span class="warn">副產品，${escHtml(m.it.byproductOf || '生產時')}要多撈</span>` : m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : ''}</td>
     <td>${escHtml(qtyText(m.it, m.need))}</td>
     <td>${escHtml(qtyText(m.it, m.it.stock))}</td>
+    <td>${m.it.safety > 0 ? escHtml(qtyText(m.it, m.it.safety)) : '-'}</td>
     <td><b>${escHtml(qtyText(m.it, m.q))}</b></td>
   </tr>`).join('');
   // 要叫的食材依廠商分組，每個廠商一張叫貨單
@@ -288,10 +290,10 @@ function renderResult() {
     ${buyHtml ? buyHtml
       : `<div class="none">${hasOrder ? '庫存足夠，不用叫貨' : '左邊輸入叫貨量後會自動計算'}</div>`}
     <h2 style="margin-top:6px;">要生產的成品</h2>
-    ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
+    ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>安全庫存</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
       <button class="od-copy ghost" onclick="copyMake()">複製生產單</button>`
       : `<div class="none">${hasOrder ? '庫存足夠，不用生產' : '—'}</div>`}
-    <div class="od-note">計算方式：叫貨量扣掉成品庫存＝要做的量 → 依配方算出要用多少食材並扣掉庫存 → 食材再補足到安全庫存（預留），無條件進位成要叫的數量。庫存以最近一次盤點為準。</div>`;
+    <div class="od-note">計算方式：店面叫貨量＋安全庫存－成品庫存＝要做的量 → 依配方算出要用多少食材 → 食材同樣補足到安全庫存（預留）並扣掉庫存，無條件進位成要叫的數量。庫存以最近一次盤點為準。</div>`;
 }
 
 async function copyText(text) {
