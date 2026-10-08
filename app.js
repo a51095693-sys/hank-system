@@ -42,6 +42,8 @@ export async function loadStockItems(db) {
         safety: Number(e.safety) || 0, sort: e.sort ?? 999, recipe,
         // 配方是一批的用量，這一批可以做出 yield 單位的本品項（舊資料沒有就是 1）
         yield: Number(e.yield) > 0 ? Number(e.yield) : 1,
+        // 整批生產：一次至少做一整批（配方的產出量），不能拆開做，例如辣椒一次 3 小鍋
+        wholeBatch: !!e.wholeBatch,
         supplier: e.supplier || '',
         // 內部使用：只出現在盤點，不出現在叫貨計算、不需要配方（例：煮雞產出的雞油）
         internal: !!e.internal,

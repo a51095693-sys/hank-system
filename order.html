@@ -99,7 +99,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008i";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008j";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -242,7 +242,8 @@ function plan() {
     // 自己做的成品也要做到補足安全庫存，數量無條件進位
     const raw = need + it.safety - it.stock;
     if (raw <= 1e-9) return;
-    const q = roundUp(it, raw);
+    // 整批生產的品項，做的量進位到整批（例：辣椒一批 3 小鍋，要 1 小鍋也做 3 小鍋）
+    const q = it.wholeBatch && it.recipe.length ? Math.ceil(raw / it.yield - 1e-9) * it.yield : roundUp(it, raw);
     make.push({ it, need, q, noRecipe: !it.recipe.length && !it.byproduct });
     it.recipe.forEach(r => { if (r.id) demand[r.id] = (demand[r.id] || 0) + q * r.qty / it.yield; });
   });
