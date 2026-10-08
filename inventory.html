@@ -29,6 +29,13 @@ body{background:#F3F4F1}
 .inv-hero .sub{font-size:15px;color:#C9D2CC}
 .inv-hero .ttl{font-size:24px;font-weight:900}
 .inv-pill{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px}
+.inv-slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.inv-slot{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);color:#fff;font-family:inherit;text-align:left;cursor:pointer}
+.inv-slot:hover{background:rgba(255,255,255,.08)}
+.inv-slot.now{border-color:#3FBF7F;box-shadow:inset 0 0 0 1px #3FBF7F}
+.inv-slot .nm{display:flex;align-items:center;gap:6px;font-size:20px;font-weight:900}
+.inv-slot .st{font-size:13px;color:#C9D2CC}
+.inv-slot.done .st{color:#BFE8D0}
 .inv-pill.todo{background:#F5C04A;color:#17201B}
 .inv-pill.ok{background:#BFE8D0;color:#0E2A1C}
 .inv-big{height:56px;border-radius:14px;border:none;font-family:inherit;font-size:18px;font-weight:900;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
@@ -283,6 +290,10 @@ const COUNT_TYPES = {
   '抽盤': { title: '臨時抽盤', ic: IC.search, kinds: ['成品', '原物料'], partial: true }
 };
 const REASONS = ['報廢', '試吃／員工餐', '點錯／漏記', '其他'];
+// 成品每天盤兩次；15:00 前算中午，之後算晚上
+const SLOTS = ['中午', '晚上'];
+const slotNow = () => new Date().getHours() < 15 ? '中午' : '晚上';
+const countTitle = (c) => c.slot ? `${c.slot}盤點` : COUNT_TYPES[c.type].title;
 const DRAFT_KEY = 'inv_draft';
 
 let _ud = null;
@@ -377,26 +388,35 @@ async function loadHome() {
   }
 
   const today = todayStr();
-  const doneToday = _recent.find(r => r.date === today && r.type === '成品');
   const draft = readDraft();
   const nFinished = _items.filter(i => i.kind === '成品').length;
+  const doneOf = (s) => _recent.find(r => r.date === today && r.type === '成品' && r.slot === s);
 
   let html = '';
-  if (draft && COUNT_TYPES[draft.type]) {
-    const n = Object.keys(draft.counts || {}).length;
+  const n = Object.keys(draft?.counts || {}).length;
+  if (draft && COUNT_TYPES[draft.type] && n) {
     html += `<div class="inv-hero">
       <div class="hrow"><span class="lab">未完成的盤點</span><span class="inv-pill todo">進行中</span></div>
-      <div class="ttl">${COUNT_TYPES[draft.type].title}</div>
+      <div class="ttl">${escHtml(countTitle(draft))}</div>
       <div class="sub">上次已盤 ${n} 項，可以接續完成</div>
       <button class="inv-big go" onclick="resumeDraft()">繼續盤點 ${svg(IC.arrow, 22, 2.5)}</button>
       <button class="inv-link" onclick="discardDraft()">放棄這次暫存</button>
     </div>`;
   } else {
+    // 主按鈕：優先盤現在這個時段；已完成就改盤另一個未完成的時段
+    const now = slotNow();
+    const target = !doneOf(now) ? now : (SLOTS.find(s => !doneOf(s)) || now);
+    const allDone = SLOTS.every(doneOf);
     html += `<div class="inv-hero">
-      <div class="hrow"><span class="lab">今日任務</span><span class="inv-pill ${doneToday ? 'ok' : 'todo'}">${doneToday ? '已完成' : '未開始'}</span></div>
-      <div class="ttl">收工成品盤點</div>
-      <div class="sub">${nFinished} 個品項${doneToday ? ` · ${escHtml(doneToday.by)} 於 ${fmtAt(doneToday.at)} 完成` : ' · 約 5 分鐘'}</div>
-      <button class="inv-big go" onclick="startCount('成品')" ${nFinished ? '' : 'disabled'}>${doneToday ? '再盤一次' : '開始盤點'} ${svg(IC.arrow, 22, 2.5)}</button>
+      <div class="hrow"><span class="lab">今日任務 · ${nFinished} 個品項</span><span class="inv-pill ${allDone ? 'ok' : 'todo'}">${SLOTS.filter(doneOf).length} / 2 完成</span></div>
+      <div class="inv-slots">${SLOTS.map(s => {
+        const d = doneOf(s);
+        return `<button class="inv-slot${d ? ' done' : ''}${s === target && !allDone ? ' now' : ''}" onclick="startCount('成品','${s}')" ${nFinished ? '' : 'disabled'}>
+          <span class="nm">${d ? svg(IC.check, 18, 3, '#3FBF7F') : ''}${s}盤點</span>
+          <span class="st">${d ? `${escHtml(d.by)} · ${fmtAt(d.at).slice(-5)} 完成` : '未完成'}</span>
+        </button>`;
+      }).join('')}</div>
+      <button class="inv-big go" onclick="startCount('成品','${target}')" ${nFinished ? '' : 'disabled'}>${allDone ? `再盤一次（${target}）` : `開始${target}盤點`} ${svg(IC.arrow, 22, 2.5)}</button>
     </div>`;
   }
 
@@ -477,10 +497,12 @@ window.openDetail = (id) => {
 };
 
 // ── 2. 逐項盤點 ──
-window.startCount = (type) => {
+window.startCount = (type, slot) => {
   const draft = readDraft();
   if (draft && Object.keys(draft.counts || {}).length && !confirm('有一份暫存的盤點還沒完成，要放棄它並開始新的盤點嗎？')) return;
-  _cur = { type, counts: {}, reasons: {}, cat: '全部', startedAt: Date.now() };
+  // 成品盤點一定歸到中午或晚上；從下方「成品盤點」按鈕進來時依現在時間判斷
+  if (type === '成品' && !slot) slot = slotNow();
+  _cur = { type, slot: type === '成品' ? slot : '', counts: {}, reasons: {}, cat: '全部', startedAt: Date.now() };
   saveDraft(false);
   openCount();
 };
@@ -502,8 +524,7 @@ function countItems() {
 }
 
 function openCount() {
-  const t = COUNT_TYPES[_cur.type];
-  document.getElementById('cTitle').textContent = t.title;
+  document.getElementById('cTitle').textContent = countTitle(_cur);
   // 已刪除的品項不再盤
   const ids = new Set(countItems().map(i => i.id));
   Object.keys(_cur.counts).forEach(id => { if (!ids.has(id)) delete _cur.counts[id]; });
@@ -698,7 +719,7 @@ window.submitCount = async () => {
     const batch = writeBatch(db);
     const countRef = doc(collection(db, 'stockCounts'));
     batch.set(countRef, {
-      date: todayStr(), type: _cur.type, title: t.title,
+      date: todayStr(), type: _cur.type, slot: _cur.slot || '', title: countTitle(_cur),
       by: _ud.name, at: serverTimestamp(), total: items.length, diffCount, firstCount, items
     });
     items.forEach(r => {
@@ -732,7 +753,7 @@ function renderDone(t, items, diffCount, firstCount) {
     const sec = Math.max(0, Math.round((Date.now() - _cur.startedAt) / 1000));
     took = ` · 用時 ${sec >= 60 ? Math.floor(sec / 60) + ' 分 ' : ''}${sec % 60} 秒`;
   }
-  document.getElementById('doneMeta').textContent = `${t.title} · ${now} · ${_ud.name}${took}`;
+  document.getElementById('doneMeta').textContent = `${countTitle(_cur)} · ${now} · ${_ud.name}${took}`;
   const diffs = items.filter(r => !r.first && r.diff !== 0);
   const unitOf = (r) => _items.find(i => i.id === r.id) || r;
   const row = (tone, icon, title, sub) => `<div class="inv-li" style="justify-content:flex-start;">
