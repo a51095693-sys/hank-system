@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>客訴反饋系統 - 登入</title>
+<title>央廚盤點 - 登入</title>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
 <link rel="preconnect" href="https://firestore.googleapis.com">
@@ -32,9 +32,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 <body>
 <div class="wrap">
   <div class="brand">
-    <div class="brand-icon">📢</div>
-    <h1>客訴反饋系統</h1>
-    <p>內部客訴管理平台</p>
+    <div class="brand-icon">📦</div>
+    <h1>央廚盤點</h1>
+    <p>央廚庫存盤點平台</p>
   </div>
   <div class="card">
     <div class="fr">
@@ -67,7 +67,7 @@ const db = getFirestore(app, 'default');
 onAuthStateChanged(auth, async u => {
   if (!u) return;
   const ud = await getUserData(db, u);
-  window.location.href = (ud.role === 'admin' || ud.role === 'manager') ? 'admin.html' : 'submit.html';
+  window.location.href = 'inventory.html';
 });
 
 document.getElementById('idNo').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('pwd').focus(); });

@@ -1,16 +1,7 @@
 import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, getDoc, collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福','新莊'];
-
-export async function loadTags(db) {
-  try {
-    const snap = await getDocs(collection(db, 'tags'));
-    return snap.docs
-      .map(d => ({ id: d.id, name: d.data().name, color: d.data().color || '#64748B' }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
-  } catch (e) { return []; }
-}
 
 export async function loadStockItems(db) {
   const snap = await getDocs(collection(db, 'stockItems'));
@@ -39,15 +30,6 @@ export function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-export async function logAudit(db, ud, action, complaintId, store, detail) {
-  try {
-    await addDoc(collection(db, 'auditLog'), {
-      action, complaintId, store: store || '', detail: detail || '',
-      actor: ud.name, actorRole: ud.role === 'admin' ? '管理員' : (ud.jobTitle || '員工'),
-      at: serverTimestamp()
-    });
-  } catch (e) {}
-}
 
 export function showToast(msg, type = '') {
   const t = document.getElementById('toast');
@@ -87,10 +69,10 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存'],['auditlog.html','📜','操作紀錄'],['tags.html','🏷️','標籤管理'],['account.html','👥','帳號管理']]
+    ? [['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存'],['account.html','👥','帳號管理']]
     : isManager
-    ? [['admin.html','📋','所有客訴'],['overdue.html','⚠️','逾期結案'],['report.html','📊','數據報表'],['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存'],['auditlog.html','📜','操作紀錄']]
-    : [['submit.html','📝','提交客訴'],['my.html','📋','我的客訴']];
+    ? [['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存']]
+    : [];
 
   const nav = document.getElementById('sb-nav');
   if (nav) {
