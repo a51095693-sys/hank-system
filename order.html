@@ -59,9 +59,7 @@
 .od-box{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px}
 .od-box .od-sup{margin:0;font-size:16px}
 .od-box.quiet{padding:10px 12px;opacity:.85}
-.od-box.done{border-color:rgba(63,191,127,.5);background:rgba(63,191,127,.08)}
 .od-later{font-size:13px;color:#9AA59F;line-height:1.9;border-top:1px dashed rgba(255,255,255,.15);padding-top:10px}
-.od-link{background:none;border:none;color:#9AA59F;font-family:inherit;font-size:12px;text-decoration:underline;cursor:pointer;align-self:flex-start;padding:0}
 @media(max-width:768px){.od-top h1{font-size:26px}}
 </style>
 </head>
@@ -104,7 +102,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261008m";
 
@@ -121,8 +119,6 @@ let _items = [];
 let _qty = {};
 // 今天起 14 天內已輸入的店面叫貨量 {日期: {成品id: 數量}}
 let _days = {};
-// 已經叫的貨（還沒到）{id, date, arrive, supplier, items: {品項id: 數量}, by}
-let _pur = [];
 const TODAY = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
 const WINDOW = 14;
 // 廠商送貨設定 {名稱: { off, note }}
@@ -151,16 +147,12 @@ onAuthStateChanged(auth, async user => {
   loadOrder();
 });
 
-// 今天叫貨要看到的資料：之後 14 天的店面叫貨量、還沒到的已叫貨
+// 今天叫貨要看到的資料：之後 14 天的店面叫貨量
 async function loadWindow() {
   const dates = Array.from({ length: WINDOW }, (_, i) => addDays(TODAY, i + 1));
-  const [snaps, pur] = await Promise.all([
-    Promise.all(dates.map(d => getDoc(doc(db, 'orders', d)))),
-    getDocs(query(collection(db, 'purchases'), where('arrive', '>=', TODAY)))
-  ]);
+  const snaps = await Promise.all(dates.map(d => getDoc(doc(db, 'orders', d))));
   _days = {};
   snaps.forEach((sn, i) => { if (sn.exists() && Object.keys(sn.data().qty || {}).length) _days[dates[i]] = sn.data().qty; });
-  _pur = pur.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 window.loadOrder = async () => {
@@ -251,8 +243,7 @@ window.saveOrder = async () => {
 
 // ── 計算 ──
 // 從成品往下展開配方：每一層都補足到安全庫存，扣掉現有庫存，不夠的才往下推算材料。
-// extra：還沒到但已經叫的貨，當作庫存
-function plan(qty = _qty, extra = {}) {
+function plan(qty = _qty) {
   const demand = {};
   Object.entries(qty).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
 
@@ -273,13 +264,12 @@ function plan(qty = _qty, extra = {}) {
     if (it.internal) return;
     const need = demand[it.id] || 0;
     if (isPurchased(it)) {
-      const stock = it.stock + (extra[it.id] || 0);
-      const q = Math.max(0, need + it.safety - stock);
-      if (q > 1e-9) buy.push({ it, need, q, stock });
+      const q = Math.max(0, need + it.safety - it.stock);
+      if (q > 1e-9) buy.push({ it, need, q, stock: it.stock });
       return;
     }
     // 自己做的成品也要做到補足安全庫存，數量無條件進位
-    const raw = need + it.safety - it.stock - (extra[it.id] || 0);
+    const raw = need + it.safety - it.stock;
     if (raw <= 1e-9) return;
     // 整批生產的品項，做的量進位到整批（例：辣椒一批 3 小鍋，要 1 小鍋也做 3 小鍋）
     const q = it.wholeBatch && it.recipe.length ? Math.ceil(raw / it.yield - 1e-9) * it.yield : roundUp(it, raw);
@@ -342,7 +332,7 @@ const sumQty = (dates) => {
 };
 
 // 今天要叫的貨：每家廠商依「幾天後到貨」「下次到貨日」各自計算
-//   到貨前這幾天的出貨要先扣掉，已經叫、還沒到的貨當作庫存
+//   到貨前這幾天的出貨要先扣掉；但到貨前如果這家有送貨，那是之前叫的貨，當作已經照系統叫過
 function todayPlan() {
   const sups = [...new Set(_items.filter(isPurchased).map(supOf))];
   const cache = {};
@@ -350,25 +340,22 @@ function todayPlan() {
     const cfg = cfgOf(sup);
     const lead = cfg.lead || 1;
     const arrive = addDays(TODAY, lead);
-    const done = _pur.find(p => p.date === TODAY && p.supplier === sup);
     if (offOn(sup, arrive)) {
       // 今天叫的話到貨那天不送：找下一個可以叫的日子
       let k = 1;
       while (k < 8 && offOn(sup, addDays(TODAY, k + lead))) k++;
-      return { sup, cfg, skip: true, nextOrder: addDays(TODAY, k), nextArrive: addDays(TODAY, k + lead), done };
+      return { sup, cfg, skip: true, nextOrder: addDays(TODAY, k), nextArrive: addDays(TODAY, k + lead) };
     }
     let n = 1;
     while (n < 7 && offOn(sup, addDays(arrive, n))) n++;
-    const pre = Array.from({ length: lead - 1 }, (_, i) => addDays(TODAY, i + 1));
+    // 到貨前要靠現有庫存撐的日子：從明天到「之前叫的貨送到」的前一天
+    const pre = [];
+    for (let i = 1; i < lead; i++) { const d = addDays(TODAY, i); if (!offOn(sup, d)) break; pre.push(d); }
     const cover = Array.from({ length: n }, (_, i) => addDays(arrive, i));
-    const key = lead + '|' + n;
+    const key = pre.length + '|' + lead + '|' + n;
     if (!cache[key]) {
       const sq = sumQty([...pre, ...cover]);
-      // 到貨前會送到的已叫貨（今天叫的這張除外）
-      const extra = {};
-      _pur.filter(p => p.arrive > TODAY && p.arrive < arrive).forEach(p =>
-        Object.entries(p.items || {}).forEach(([id, q]) => { extra[id] = (extra[id] || 0) + q; }));
-      cache[key] = { ...sq, buy: sq.none && !Object.keys(sq.all).length ? [] : plan(sq.all, extra).buy };
+      cache[key] = { ...sq, buy: sq.none && !Object.keys(sq.all).length ? [] : plan(sq.all).buy };
     }
     const c = cache[key];
     const rows = c.buy.filter(b => supOf(b.it) === sup).map(b => ({ ...b }));
@@ -386,18 +373,13 @@ function todayPlan() {
         b.alone = `不能單獨叫，要搭配${w.name}；這次不用叫${w.name}，可以下次再一起叫，或一起叫${w.name}${wr.min > 0 ? ` ${qtyText(w, wr.min)}` : ''}`;
       }
     });
-    return { sup, cfg, lead, arrive, n, pre, cover, rows, est: c.est, none: c.none && !Object.keys(c.all).length, done };
+    return { sup, cfg, lead, arrive, n, pre, cover, rows, est: c.est, none: c.none && !Object.keys(c.all).length };
   }).sort((a, b) => (a.skip ? 1 : 0) - (b.skip ? 1 : 0) || (a.rows?.length ? 0 : 1) - (b.rows?.length ? 0 : 1) || a.sup.localeCompare(b.sup, 'zh-Hant'));
 }
 
 function supCard(t, k) {
   const head = `<div class="od-sup">${escHtml(t.sup)}</div>`;
   const note = t.cfg.note ? `<span class="warn" style="color:#C9D2CC;">📝 ${escHtml(t.cfg.note)}</span>` : '';
-  if (t.done) {
-    const items = Object.entries(t.done.items || {}).map(([id, q]) => { const it = byId(id); return it ? `${it.name} ${qtyText(it, q)}` : ''; }).filter(Boolean).join('、');
-    return `<div class="od-box done">${head}<span class="warn" style="color:#BFE8D0;">✓ 今天已叫（${escHtml(t.done.by || '')}），${wk(t.done.arrive)}到貨${items ? '：' + escHtml(items) : ''}</span>
-      <button class="od-link" onclick="unmark(${k})">取消「已叫」</button></div>`;
-  }
   const span = `${wk(t.arrive)}到貨${t.n > 1 ? `，下一趟要到 ${wk(addDays(t.arrive, t.n))}，所以叫 ${t.n} 天的量` : ''}`;
   const preTip = t.pre.length ? `；到貨前 ${t.pre.length} 天的出貨已先扣掉` : '';
   const estTip = t.est ? `<span class="warn">有幾天的店面叫貨量還沒輸入，先用最近一天的量估</span>` : '';
@@ -412,7 +394,7 @@ function supCard(t, k) {
   </tr>`).join('');
   return `<div class="od-box">${head}<span class="warn" style="color:#BFE8D0;">${span}${preTip}</span>${estTip}${note}${t.rows.filter(b => b.alone).map(b => `<span class="warn">⚠️ ${escHtml(b.it.name)}${escHtml(b.alone)}</span>`).join('')}
     <table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="flex gap-2"><button class="od-copy" onclick="copyBuy(${k})">複製叫貨單</button><button class="od-copy ghost" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="markDone(${k})">✓ 已叫</button></div></div>`;
+    <button class="od-copy" onclick="copyBuy(${k})">複製叫貨單</button></div>`;
 }
 
 function renderResult() {
@@ -422,7 +404,7 @@ function renderResult() {
   const hasOrder = Object.keys(_qty).length > 0;
   _today = todayPlan();
   const now = _today.filter(t => !t.skip);
-  const later = _today.filter(t => t.skip && !t.done);
+  const later = _today.filter(t => t.skip);
   const makeRows = make.map(m => `<tr>
     <td>${escHtml(m.it.label)}${m.it.byproduct ? `<span class="warn">副產品，${escHtml(m.it.byproductOf || '生產時')}要多撈</span>` : m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : `<span class="uses">用料：${escHtml(usesText(m))}</span>`}</td>
     <td>${escHtml(qtyText(m.it, m.need))}</td>
@@ -438,7 +420,7 @@ function renderResult() {
     ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>安全庫存</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
       <button class="od-copy ghost" onclick="copyMake()">複製生產單</button>`
       : `<div class="none">${hasOrder ? '庫存足夠，不用生產' : '左邊輸入叫貨量後會自動計算'}</div>`}
-    <div class="od-note">計算方式：每家廠商依「今天叫幾天後到」「到貨後要撐到下次到貨」算出這段期間的店面叫貨量，扣掉到貨前會先出掉的量、加上已叫還沒到的貨，再補足安全庫存（預留），套用最低叫貨量後無條件進位。庫存以最近一次盤點為準；叫完按「✓ 已叫」，之後的計算就會把這批貨算進去。</div>`;
+    <div class="od-note">計算方式：每家廠商依「今天叫幾天後到」「到貨後要撐到下次到貨」算出這段期間的店面叫貨量，扣掉到貨前會先出掉的量，再補足安全庫存（預留），套用最低叫貨量後無條件進位。庫存以最近一次盤點為準。</div>`;
 }
 
 async function copyText(text) {
@@ -453,30 +435,6 @@ window.copyBuy = (k) => {
   const t = _today[k];
   if (!t) return;
   copyText(`【叫貨單】${wk(t.arrive)}到貨 ${t.sup}\n${t.rows.map(b => `${b.it.name}：${qtyText(b.it, b.order)}`).join('\n')}`);
-};
-// 標記已叫：記下這批貨，到貨前的計算會把它當成庫存
-const purId = (sup) => `${TODAY}|${sup.replace(/\//g, '／')}`;
-window.markDone = async (k) => {
-  const t = _today[k];
-  if (!t) return;
-  const items = {};
-  t.rows.forEach(b => { items[b.it.id] = b.order; });
-  try {
-    const data = { date: TODAY, arrive: t.arrive, supplier: t.sup, items, by: _ud.name, at: serverTimestamp() };
-    await setDoc(doc(db, 'purchases', purId(t.sup)), data);
-    _pur = _pur.filter(p => p.id !== purId(t.sup)).concat({ id: purId(t.sup), ...data });
-    showToast(`已記錄「${t.sup}」今天叫的貨`, 'success');
-    renderResult();
-  } catch (e) { showToast('記錄失敗，請重試', 'error'); }
-};
-window.unmark = async (k) => {
-  const t = _today[k];
-  if (!t?.done || !confirm(`取消「${t.sup}」今天已叫的紀錄？`)) return;
-  try {
-    await deleteDoc(doc(db, 'purchases', t.done.id));
-    _pur = _pur.filter(p => p.id !== t.done.id);
-    renderResult();
-  } catch (e) { showToast('取消失敗，請重試', 'error'); }
 };
 window.copyMake = () => {
   const date = document.getElementById('odDate').value;
