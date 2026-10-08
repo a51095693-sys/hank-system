@@ -18,6 +18,10 @@
 .inv{--ink:#17201B;--mute:#56605A;--line:#E1E4DF;--bg:#F3F4F1;--green:#1E6B47;--green2:#3FBF7F;--warn:#8A3D08;--warnbg:#FDF1E6;--warnline:#F1D3B6;--okbg:#E3F2EA;
   max-width:1120px;font-family:'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;color:var(--ink)}
 body{background:#F3F4F1}
+/* 讓內容區不被分類按鈕列等寬內容撐開（手機版右側被切掉的原因） */
+.main{min-width:0}
+.inv-chips{max-width:100%;scrollbar-width:none}
+.inv-chips::-webkit-scrollbar{display:none}
 .inv svg{flex-shrink:0}
 .inv-top{display:flex;justify-content:space-between;align-items:flex-end;margin:4px 4px 16px}
 .inv-top .who{font-size:14px;color:var(--mute)}
@@ -339,9 +343,11 @@ async function loadItems() {
 
 // 規格寫「N小單位／大單位」且大單位就是品項單位時（例：7包／箱、2.5小鍋／長鍋），
 // 盤點改成「大單位＋小單位」兩格；per = 每個大單位等於幾個小單位
+// 「份」是每盤的份量說明（10份／盤），不是盤點單位，不拆兩格
+const NOT_COUNT_UNITS = ['份'];
 function subUnit(i) {
   const m = /^\s*(\d+(?:\.\d+)?)\s*([^\d\s／/]+)\s*[／/]\s*(\S+?)\s*$/.exec(i.spec || '');
-  if (!m || m[3] !== i.unit || m[2] === i.unit) return { per: 0, sub: '' };
+  if (!m || m[3] !== i.unit || m[2] === i.unit || NOT_COUNT_UNITS.includes(m[2])) return { per: 0, sub: '' };
   const per = parseFloat(m[1]);
   return per > 1 ? { per, sub: m[2] } : { per: 0, sub: '' };
 }
