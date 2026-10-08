@@ -69,9 +69,9 @@ export function renderSidebar(ud, activePage, auth) {
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
   const pages = isAdmin
-    ? [['inventory.html','📦','盤點'],['produce.html','🏭','生產／出貨'],['stock.html','🗃️','品項庫存'],['account.html','👥','帳號管理']]
+    ? [['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存'],['account.html','👥','帳號管理']]
     : isManager
-    ? [['inventory.html','📦','盤點'],['produce.html','🏭','生產／出貨'],['stock.html','🗃️','品項庫存']]
+    ? [['inventory.html','📦','盤點'],['stock.html','🗃️','品項庫存']]
     : [];
 
   const nav = document.getElementById('sb-nav');
@@ -103,16 +103,15 @@ function initPasswordChange(auth) {
       <div class="modal-title">🔒 修改密碼</div>
       <div style="margin-bottom:12px;">
         <label class="form-label">目前密碼 *</label>
-        <input type="text" autocomplete="username" style="display:none" aria-hidden="true" tabindex="-1">
-        <input type="password" autocomplete="current-password" class="form-control" id="pwdOld" placeholder="輸入目前密碼">
+        <input type="password" class="form-control" id="pwdOld" placeholder="輸入目前密碼">
       </div>
       <div style="margin-bottom:12px;">
         <label class="form-label">新密碼 *</label>
-        <input type="password" autocomplete="new-password" class="form-control" id="pwdNew" placeholder="至少 6 個字元">
+        <input type="password" class="form-control" id="pwdNew" placeholder="至少 6 個字元">
       </div>
       <div style="margin-bottom:16px;">
         <label class="form-label">確認新密碼 *</label>
-        <input type="password" autocomplete="new-password" class="form-control" id="pwdNew2" placeholder="再輸入一次新密碼">
+        <input type="password" class="form-control" id="pwdNew2" placeholder="再輸入一次新密碼">
       </div>
       <div class="flex gap-2">
         <button class="btn btn-primary w-full" id="pwdSaveBtn">儲存</button>
