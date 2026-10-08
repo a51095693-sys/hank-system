@@ -41,6 +41,11 @@ body{background:#F3F4F1}
 .inv-tab.on .n{background:var(--okbg);color:var(--green)}
 .inv-group{grid-column:1/-1;font-size:15px;font-weight:900;color:var(--ink);margin:14px 4px 8px;padding-bottom:6px;border-bottom:2px solid var(--line)}
 .inv-group:first-child{margin-top:2px}
+.inv-stabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:rgba(255,255,255,.08);border-radius:12px;padding:4px}
+.inv-stabs button{height:40px;border:none;border-radius:9px;background:none;color:#C9D2CC;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.inv-stabs button .n{font-size:12px;background:rgba(255,255,255,.12);border-radius:999px;padding:0 8px}
+.inv-stabs button.on{background:#fff;color:#17201B}
+.inv-stabs button.on .n{background:#E3F2EA;color:#1E6B47}
 .inv-plan tr.grp td{color:#F5C04A;font-weight:800;font-size:13px;padding-top:12px}
 .inv-remind{background:#FFF7E0;border:1px solid #F5C04A;border-radius:14px;padding:12px 16px;margin-bottom:16px;font-size:15px;line-height:1.7;color:#17201B}
 .inv-slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -374,22 +379,34 @@ async function loadHome() {
 }
 
 // 完整庫存清單：全部品項的目前數量
+// 目前庫存清單：成品、食材分頁；複製時只複製目前這一頁
+let _stockTab = '';
+let _stockCardArgs = ['', ''];
 function stockCard(title, sub) {
-  return `<div class="inv-plan">
-    <div class="hrow" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div class="lab" style="font-size:15px;font-weight:700;color:#fff;">${escHtml(title)}（${_items.length} 項）</div>
-    </div>
+  _stockCardArgs = [title, sub];
+  const kinds = KINDS.filter(k => _items.some(i => i.kind === k));
+  if (!kinds.includes(_stockTab)) _stockTab = kinds[0] || '';
+  const list = _items.filter(i => i.kind === _stockTab);
+  return `<div class="inv-plan" id="stockCard">
+    <div class="lab" style="font-size:15px;font-weight:700;color:#fff;">${escHtml(title)}</div>
     ${sub ? `<div class="lab" style="margin-top:-6px;">${escHtml(sub)}</div>` : ''}
+    ${kinds.length > 1 ? `<div class="inv-stabs" role="tablist">${kinds.map(k =>
+      `<button type="button" role="tab" aria-selected="${k === _stockTab}" class="${k === _stockTab ? 'on' : ''}" onclick="pickStockTab('${k}')">${k}<span class="n">${_items.filter(i => i.kind === k).length}</span></button>`).join('')}</div>` : ''}
     <table>
       <thead><tr><th>品名</th><th>目前庫存</th></tr></thead>
-      <tbody>${_items.map((i, k) => `${k === 0 || _items[k - 1].kind !== i.kind ? `<tr class="grp"><td colspan="2">${escHtml(i.kind)}</td></tr>` : ''}<tr>
+      <tbody>${list.map(i => `<tr>
         <td>${escHtml(i.label)}</td>
         <td style="color:#fff;">${escHtml(qtyText(i, i.stock))}</td>
       </tr>`).join('')}</tbody>
     </table>
-    <button class="inv-big go" onclick="copyStock()">複製庫存</button>
+    <button class="inv-big go" onclick="copyStock()">複製${escHtml(_stockTab)}庫存</button>
   </div>`;
 }
+window.pickStockTab = (k) => {
+  _stockTab = k;
+  const el = document.getElementById('stockCard');
+  if (el) el.outerHTML = stockCard(..._stockCardArgs);
+};
 
 // 複製成可以貼到 LINE 的文字
 let _copyHeader = '';
@@ -397,7 +414,8 @@ function stockText(header, rows) {
   // 依種類分段：〔成品〕、〔食材〕
   const lines = rows.map((r, k) => {
     const kind = r.u?.kind || '';
-    const head = kind && (k === 0 || rows[k - 1].u?.kind !== kind) ? `${k ? '\n' : ''}〔${kind}〕\n` : '';
+    const multi = new Set(rows.map(x => x.u?.kind)).size > 1;
+    const head = multi && kind && (k === 0 || rows[k - 1].u?.kind !== kind) ? `${k ? '\n' : ''}〔${kind}〕\n` : '';
     return `${head}${r.name}：${qtyText(r.u, r.qty)}`;
   });
   return `【庫存】${header}\n${lines.join('\n')}`;
@@ -413,7 +431,7 @@ async function copyText(text) {
 window.copyStock = () => {
   const now = new Date();
   const header = _copyHeader || `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  copyText(stockText(header, _items.map(i => ({ name: i.label, u: i, qty: i.stock }))));
+  copyText(stockText(`${header} ${_stockTab}`, _items.filter(i => i.kind === _stockTab).map(i => ({ name: i.label, u: i, qty: i.stock }))));
 };
 
 window.backHome = () => loadHome();
