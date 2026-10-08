@@ -100,7 +100,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText } from "./app.js?v=20261008j";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty } from "./app.js?v=20261008j";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -253,11 +253,23 @@ function plan() {
 
 // 叫貨數量無條件進位到整數（雙單位品項進位到整數小單位）
 // 做這次的量要用的材料，例：「生鮮雞肉 38.125 件」
+// 用台斤／兩寫的材料換成實際拿的單位：果糖幾桶、油膏幾桶、水幾 CC，後面附上台斤
 function usesText(m) {
   return m.it.recipe.map(r => {
     const mat = r.id ? byId(r.id) : null;
     if (r.id && !mat) return '';
-    return `${mat ? mat.name : r.name} ${recipeAmtText({ ...r, amt: r.amt * m.q / m.it.yield }, mat)}`;
+    const sr = { ...r, amt: r.amt * m.q / m.it.yield };
+    const w = recipeAmtText(sr, mat);
+    let main = w;
+    if (!mat && r.u && /水/.test(r.name)) {
+      // 水：1 台斤 = 600 公克 = 600 CC
+      main = `${fmtQty(Math.round((r.u === '台斤' ? sr.amt : sr.amt / 16) * 600))} CC（${w}）`;
+    } else if (mat && r.u && mat.catty > 0) {
+      const q = recipeQty(sr, mat);
+      // 雙單位品項（例：油膏 4 桶／箱）用小單位顯示，比較好拿
+      main = `${mat.per ? `${fmtQty(Math.round(q * mat.per * 100) / 100)} ${mat.sub}` : `${fmtQty(Math.round(q * 100) / 100)} ${mat.unit}`}（${w}）`;
+    }
+    return `${mat ? mat.name : r.name} ${main}`;
   }).filter(Boolean).join('、');
 }
 
