@@ -103,15 +103,16 @@ function initPasswordChange(auth) {
       <div class="modal-title">🔒 修改密碼</div>
       <div style="margin-bottom:12px;">
         <label class="form-label">目前密碼 *</label>
-        <input type="password" class="form-control" id="pwdOld" placeholder="輸入目前密碼">
+        <input type="text" autocomplete="username" style="display:none" aria-hidden="true" tabindex="-1">
+        <input type="password" autocomplete="current-password" class="form-control" id="pwdOld" placeholder="輸入目前密碼">
       </div>
       <div style="margin-bottom:12px;">
         <label class="form-label">新密碼 *</label>
-        <input type="password" class="form-control" id="pwdNew" placeholder="至少 6 個字元">
+        <input type="password" autocomplete="new-password" class="form-control" id="pwdNew" placeholder="至少 6 個字元">
       </div>
       <div style="margin-bottom:16px;">
         <label class="form-label">確認新密碼 *</label>
-        <input type="password" class="form-control" id="pwdNew2" placeholder="再輸入一次新密碼">
+        <input type="password" autocomplete="new-password" class="form-control" id="pwdNew2" placeholder="再輸入一次新密碼">
       </div>
       <div class="flex gap-2">
         <button class="btn btn-primary w-full" id="pwdSaveBtn">儲存</button>
