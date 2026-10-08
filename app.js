@@ -8,13 +8,42 @@ export async function loadStockItems(db) {
   return snap.docs
     .map(d => {
       const e = d.data();
-      return {
+      const item = {
         id: d.id, name: e.name || '', kind: e.kind || '成品', category: e.category || '',
         unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
         safety: Number(e.safety) || 0, sort: e.sort ?? 999
       };
+      return { ...item, ...subUnit(item) };
     })
     .sort((a, b) => a.kind.localeCompare(b.kind, 'zh-Hant') || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
+}
+
+// 規格寫「N小單位／大單位」且大單位就是品項單位時（例：7包／箱、2.5小鍋／長鍋），
+// 盤點與異動改成「大單位＋小單位」兩格；per = 每個大單位等於幾個小單位
+// 「份」是每盤的份量說明（10份／盤），不是盤點單位，不拆兩格
+const NOT_COUNT_UNITS = ['份'];
+export function subUnit(i) {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*([^\d\s／/]+)\s*[／/]\s*(\S+?)\s*$/.exec(i.spec || '');
+  if (!m || m[3] !== i.unit || m[2] === i.unit || NOT_COUNT_UNITS.includes(m[2])) return { per: 0, sub: '' };
+  const per = parseFloat(m[1]);
+  return per > 1 ? { per, sub: m[2] } : { per: 0, sub: '' };
+}
+
+// 大單位數量（可含小數）拆成整數大單位與剩下的小單位
+export function splitBox(q, per) {
+  const small = q * per;
+  const b = Math.floor((small + 1e-6) / per);
+  return { b, p: Math.round((small - b * per) * 100) / 100 };
+}
+
+// 顯示數量：雙單位品項顯示「2 箱 3 包」「1 長鍋 1 小鍋」
+export function qtyText(i, q) {
+  if (i.per) {
+    const neg = q < 0;
+    const { b, p } = splitBox(Math.abs(q), i.per);
+    return `${neg ? '−' : ''}${b} ${i.unit}${p ? ` ${fmtQty(p)} ${i.sub}` : ''}`;
+  }
+  return `${q < 0 ? '−' : ''}${fmtQty(Math.abs(q))} ${i.unit}`;
 }
 
 export function fmtQty(n) {

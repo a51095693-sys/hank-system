@@ -264,7 +264,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml } from "./app.js";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText } from "./app.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -334,40 +334,13 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
 
 const isLow = (it) => it.safety > 0 && it.stock < it.safety;
 
-// 與 loadStockItems 相同，另外帶出 counted（是否盤點過）與大小單位換算
+// 與 loadStockItems 相同，另外帶出 counted（是否盤點過）
 async function loadItems() {
   const [items, snap] = await Promise.all([loadStockItems(db), getDocs(collection(db, 'stockItems'))]);
   const counted = new Set(snap.docs.filter(d => d.data().lastCountAt).map(d => d.id));
-  return items.map(i => ({ ...i, counted: counted.has(i.id), ...subUnit(i) }));
+  return items.map(i => ({ ...i, counted: counted.has(i.id) }));
 }
 
-// 規格寫「N小單位／大單位」且大單位就是品項單位時（例：7包／箱、2.5小鍋／長鍋），
-// 盤點改成「大單位＋小單位」兩格；per = 每個大單位等於幾個小單位
-// 「份」是每盤的份量說明（10份／盤），不是盤點單位，不拆兩格
-const NOT_COUNT_UNITS = ['份'];
-function subUnit(i) {
-  const m = /^\s*(\d+(?:\.\d+)?)\s*([^\d\s／/]+)\s*[／/]\s*(\S+?)\s*$/.exec(i.spec || '');
-  if (!m || m[3] !== i.unit || m[2] === i.unit || NOT_COUNT_UNITS.includes(m[2])) return { per: 0, sub: '' };
-  const per = parseFloat(m[1]);
-  return per > 1 ? { per, sub: m[2] } : { per: 0, sub: '' };
-}
-
-// 大單位數量（可含小數）拆成整數大單位與剩下的小單位
-function splitBox(q, per) {
-  const small = q * per;
-  const b = Math.floor((small + 1e-6) / per);
-  return { b, p: Math.round((small - b * per) * 100) / 100 };
-}
-
-// 顯示數量：雙單位品項顯示「2 箱 3 包」「1 長鍋 1 小鍋」
-function qtyText(i, q) {
-  if (i.per) {
-    const neg = q < 0;
-    const { b, p } = splitBox(Math.abs(q), i.per);
-    return `${neg ? '−' : ''}${b} ${i.unit}${p ? ` ${fmtQty(p)} ${i.sub}` : ''}`;
-  }
-  return `${q < 0 ? '−' : ''}${fmtQty(Math.abs(q))} ${i.unit}`;
-}
 const fmtAt = (ts) => ts?.toDate ? ts.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
 
 // ── 1. 首頁 ──
