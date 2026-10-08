@@ -16,7 +16,7 @@
 <style>
 /* 盤點頁配色依設計稿 */
 .inv{--ink:#17201B;--mute:#56605A;--line:#E1E4DF;--bg:#F3F4F1;--green:#1E6B47;--green2:#3FBF7F;--warn:#8A3D08;--warnbg:#FDF1E6;--warnline:#F1D3B6;--okbg:#E3F2EA;
-  max-width:520px;font-family:'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;color:var(--ink)}
+  max-width:1120px;font-family:'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;color:var(--ink)}
 body{background:#F3F4F1}
 .inv svg{flex-shrink:0}
 .inv-top{display:flex;justify-content:space-between;align-items:flex-end;margin:4px 4px 16px}
@@ -109,7 +109,19 @@ button.inv-li:hover{background:#FAFBF9}
 .inv-box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:12px}
 .inv-box summary{font-size:16px;font-weight:700;cursor:pointer}
 .inv-done-ic{width:88px;height:88px;border-radius:999px;background:var(--green);display:flex;align-items:center;justify-content:center;margin:24px auto 10px}
-@media(max-width:768px){.inv{max-width:none}.inv-top{margin-top:0}}
+.inv-plan{background:var(--ink);color:#fff;border-radius:16px;padding:16px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px}
+.inv-plan .lab{font-size:14px;color:#C9D2CC}
+.inv-plan .row{display:flex;justify-content:space-between;gap:12px;font-size:16px}
+.inv-plan .row span:last-child{color:#C9D2CC;text-align:right}
+.inv-plan b{color:#F5C04A}
+.inv-plan .inv-big{height:48px;font-size:16px;border-radius:12px;margin-top:4px}
+#vDone{max-width:640px;margin:0 auto}
+@media(min-width:1000px){
+  .inv-home{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+  .inv-top h1{font-size:34px}
+  #cList,#dList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;align-items:start}
+}
+@media(max-width:768px){.inv{max-width:none}.inv-top{margin-top:0}.inv-bar{top:60px}}
 </style>
 </head>
 <body>
@@ -194,6 +206,7 @@ button.inv-li:hover{background:#FAFBF9}
       <div style="text-align:center;font-size:28px;font-weight:900;">盤點完成</div>
       <div style="text-align:center;font-size:15px;color:var(--mute);margin:6px 0 18px;" id="doneMeta"></div>
       <div class="inv-list" id="doneList"></div>
+      <div id="donePlan"></div>
       <div class="flex gap-2">
         <a href="stock.html" class="inv-big ghost" style="font-size:16px;">查看品項庫存</a>
         <button class="inv-big dark" style="font-size:16px;" onclick="backHome()">回首頁</button>
@@ -346,11 +359,6 @@ async function loadHome() {
   html += `<div class="inv-types">${Object.entries(COUNT_TYPES).map(([k, t]) =>
     `<button class="inv-type" onclick="startCount('${k}')">${svg(t.ic, 24, 2, '#1E6B47')}${t.title}</button>`).join('')}</div>`;
 
-  if (low.length) {
-    html += `<div class="inv-warn"><h3>${svg(IC.warn, 20, 2.2)}低於安全庫存（${low.length} 項）</h3>${low.map(i =>
-      `<div class="row"><span>${escHtml(i.name)}</span><span><b>剩 ${fmtQty(i.stock)} ${escHtml(i.unit)}</b> <small>／ 安全量 ${fmtQty(i.safety)}</small></span></div>`).join('')}</div>`;
-  }
-
   html += `<div class="inv-sec">最近盤點</div>`;
   html += _recent.length
     ? `<div class="inv-list">${_recent.map(r => `<button class="inv-li" onclick="openDetail('${r.id}')">
@@ -359,8 +367,40 @@ async function loadHome() {
       </button>`).join('')}</div>`
     : '<div class="inv-list"><div class="inv-li" style="color:var(--mute);justify-content:center;">尚無盤點紀錄</div></div>';
 
-  body.innerHTML = html;
+  let side = '';
+  if (low.length) {
+    side += `<div class="inv-warn"><h3>${svg(IC.warn, 20, 2.2)}低於安全庫存（${low.length} 項）</h3>${low.map(i =>
+      `<div class="row"><span>${escHtml(i.name)}</span><span><b>剩 ${fmtQty(i.stock)} ${escHtml(i.unit)}</b> <small>／ 安全量 ${fmtQty(i.safety)}</small></span></div>`).join('')}</div>`;
+  }
+  side += planCard();
+
+  body.innerHTML = `<div class="inv-home"><div>${html}</div><div>${side}</div></div>`;
 }
+
+// 建議生產量：補足到安全庫存所需的數量
+function planCard() {
+  const need = _items.filter(isLow).map(i => ({ ...i, need: Math.round((i.safety - i.stock) * 1000) / 1000 }));
+  if (!need.length) {
+    return `<div class="inv-plan"><div class="lab">建議生產量</div><div class="row"><span>所有品項都在安全庫存以上</span></div></div>`;
+  }
+  return `<div class="inv-plan">
+    <div class="lab">建議生產量（補足到安全庫存）</div>
+    ${need.map(i => `<div class="row"><span>${escHtml(i.name)}</span><span>安全 ${fmtQty(i.safety)} · 有 ${fmtQty(i.stock)} · <b>要做 ${fmtQty(i.need)} ${escHtml(i.unit)}</b></span></div>`).join('')}
+    <button class="inv-big go" onclick="copyPlan()">複製生產單</button>
+  </div>`;
+}
+
+window.copyPlan = async () => {
+  const now = new Date();
+  const lines = _items.filter(isLow).map(i => `・${i.name}：${fmtQty(Math.round((i.safety - i.stock) * 1000) / 1000)} ${i.unit}`);
+  const text = `【生產單】${now.getMonth() + 1}/${now.getDate()}\n${lines.join('\n')}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('已複製，可以貼到 LINE', 'success');
+  } catch (e) {
+    showToast('複製失敗，請改用截圖', 'error');
+  }
+};
 
 window.backHome = () => loadHome();
 
@@ -383,7 +423,7 @@ window.openDetail = (id) => {
 window.startCount = (type) => {
   const draft = readDraft();
   if (draft && Object.keys(draft.counts || {}).length && !confirm('有一份暫存的盤點還沒完成，要放棄它並開始新的盤點嗎？')) return;
-  _cur = { type, counts: {}, reasons: {}, cat: '全部' };
+  _cur = { type, counts: {}, reasons: {}, cat: '全部', startedAt: Date.now() };
   saveDraft(false);
   openCount();
 };
@@ -572,7 +612,12 @@ window.submitCount = async () => {
 // ── 4. 完成 ──
 function renderDone(t, items, diffCount) {
   const now = new Date().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-  document.getElementById('doneMeta').textContent = `${t.title} · ${now} · ${_ud.name}`;
+  let took = '';
+  if (_cur.startedAt) {
+    const sec = Math.max(0, Math.round((Date.now() - _cur.startedAt) / 1000));
+    took = ` · 用時 ${sec >= 60 ? Math.floor(sec / 60) + ' 分 ' : ''}${sec % 60} 秒`;
+  }
+  document.getElementById('doneMeta').textContent = `${t.title} · ${now} · ${_ud.name}${took}`;
   const low = _items.filter(isLow);
   const diffs = items.filter(r => r.diff !== 0);
   const row = (tone, icon, title, sub) => `<div class="inv-li" style="justify-content:flex-start;">
@@ -586,6 +631,7 @@ function renderDone(t, items, diffCount) {
     html += row('warn', IC.warn, `${low.length} 項低於安全庫存`, low.map(i => `${escHtml(i.name)} 剩 ${fmtQty(i.stock)} ${escHtml(i.unit)}`).join(' · '));
   }
   document.getElementById('doneList').innerHTML = html;
+  document.getElementById('donePlan').innerHTML = planCard();
 }
 </script>
 </body>
