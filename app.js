@@ -34,8 +34,8 @@ export async function loadStockItems(db) {
       //   amt + u：輸入的用量與單位（u 為空＝材料本身的單位，或「台斤」「兩」）
       //   qty：換算成材料本身單位的數量（下面依材料的台斤換算重新計算）
       const recipe = (Array.isArray(e.recipe) ? e.recipe : [])
-        .filter(r => r && r.id && Number(r.amt ?? r.qty) > 0)
-        .map(r => ({ id: r.id, amt: Number(r.amt ?? r.qty), u: WEIGHT_UNITS.includes(r.u) ? r.u : '', qty: Number(r.qty) || 0 }));
+        .filter(r => r && (r.id || r.name) && Number(r.amt ?? r.qty) > 0)
+        .map(r => ({ id: r.id || '', name: r.id ? '' : (r.name || ''), amt: Number(r.amt ?? r.qty), u: WEIGHT_UNITS.includes(r.u) ? r.u : '', qty: Number(r.qty) || 0 }));
       const item = {
         id: d.id, name: e.name || '', kind, category: e.category || '',
         unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
@@ -55,7 +55,8 @@ export async function loadStockItems(db) {
       // 不同廠商可以有同名品項；同名時顯示名稱加上廠商以便區分（label）
       label: i.supplier && all.some(o => o.id !== i.id && o.name === i.name) ? `${i.name}（${i.supplier}）` : i.name,
       // 以材料目前的台斤換算重新算出用量，換算改了配方會自動跟著變
-      recipe: i.recipe.map(r => ({ ...r, qty: recipeQty(r, all.find(o => o.id === r.id)) }))
+      // 其他（不計庫存）的行數量為 0，不影響叫貨
+      recipe: i.recipe.map(r => ({ ...r, qty: r.id ? recipeQty(r, all.find(o => o.id === r.id)) : 0 }))
     }))
     .sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
 }
@@ -81,9 +82,9 @@ export function recipeCycle(items, id, recipe) {
     if (cid === id) return true;
     if (seen.has(cid)) return false;
     seen.add(cid);
-    return (byId(cid)?.recipe || []).some(r => walk(r.id));
+    return (byId(cid)?.recipe || []).some(r => r.id && walk(r.id));
   };
-  return recipe.some(r => walk(r.id));
+  return recipe.some(r => r.id && walk(r.id));
 }
 
 // 規格寫「N小單位／大單位」且大單位就是品項單位時（例：7包／箱、2.5小鍋／長鍋），

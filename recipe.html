@@ -92,7 +92,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased, recipeQty, qtyText, fmtQty, WEIGHT_UNITS } from "./app.js?v=20261008g";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased, recipeQty, qtyText, fmtQty, WEIGHT_UNITS } from "./app.js?v=20261008h";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -138,10 +138,13 @@ async function loadAll() {
 }
 
 // 編輯用的每一行：{ id, amt, u }，u 為空代表材料本身的單位
-const toRows = (it) => it.recipe.map(r => ({ id: r.id, amt: String(r.amt), u: r.u }));
-const sig = (rows) => JSON.stringify(rows.map(r => ({ id: r.id, amt: Number(r.amt) || 0, u: r.u || '' })));
+// 「其他（不計庫存）」的行（例如水）用 id '__other'，名稱放在 name
+const OTHER = '__other';
+const toRows = (it) => it.recipe.map(r => r.id ? { id: r.id, amt: String(r.amt), u: r.u } : { id: OTHER, name: r.name, amt: String(r.amt), u: r.u || '台斤' });
+const sig = (rows) => JSON.stringify(rows.map(r => ({ id: r.id, name: r.id === OTHER ? (r.name || '').trim() : '', amt: Number(r.amt) || 0, u: r.u || '' })));
 // 存檔格式：用量、單位，以及換算成材料單位的 qty
 const cleanRecipe = (rows) => rows.filter(r => r.id && Number(r.amt) > 0).map(r => {
+  if (r.id === OTHER) return { id: '', name: (r.name || '').trim(), amt: Number(r.amt), u: r.u || '台斤', qty: 0 };
   const line = { id: r.id, amt: Number(r.amt), u: r.u || '' };
   return { ...line, qty: recipeQty(line, byId(r.id)) };
 });
@@ -199,13 +202,14 @@ function renderMain() {
           <td data-label="食材"><select class="form-control" aria-label="第 ${i + 1} 項食材" onchange="setLine(${i}, 'id', this.value)">
             <option value="">選擇食材</option>
             ${mats.map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}
-          </select></td>
+            <option value="${OTHER}" ${r.id === OTHER ? 'selected' : ''}>其他（不計庫存，例如水）</option>
+          </select>${r.id === OTHER ? `<input type="text" class="form-control" style="margin-top:6px;" aria-label="第 ${i + 1} 項名稱" placeholder="名稱，例如：水" value="${escHtml(r.name || '')}" oninput="setLine(${i}, 'name', this.value)">` : ''}</td>
           <td data-label="用量"><input type="number" min="0" step="any" inputmode="decimal" class="form-control" aria-label="第 ${i + 1} 項用量" placeholder="用量" value="${r.amt || ''}" oninput="setLine(${i}, 'amt', this.value)"></td>
-          <td data-label="單位"><select class="form-control unit" aria-label="第 ${i + 1} 項單位" onchange="setLine(${i}, 'u', this.value)" ${c ? '' : 'disabled'}>
-            <option value="" ${!r.u ? 'selected' : ''}>${c ? escHtml(c.unit) : '-'}</option>
+          <td data-label="單位"><select class="form-control unit" aria-label="第 ${i + 1} 項單位" onchange="setLine(${i}, 'u', this.value)" ${c || r.id === OTHER ? '' : 'disabled'}>
+            ${r.id === OTHER ? '' : `<option value="" ${!r.u ? 'selected' : ''}>${c ? escHtml(c.unit) : '-'}</option>`}
             ${WEIGHT_UNITS.map(w => `<option value="${w}" ${r.u === w ? 'selected' : ''}>${w}</option>`).join('')}
           </select></td>
-          <td data-label="換算" id="conv-${i}">${convText(r)}</td>
+          <td data-label="換算" id="conv-${i}">${r.id === OTHER ? '<span class="rc-u">不計庫存</span>' : convText(r)}</td>
           <td><button type="button" class="btn btn-sm btn-outline" aria-label="移除第 ${i + 1} 項" onclick="removeLine(${i})">✕</button></td>
         </tr>`;
       }).join('')}</tbody>
@@ -238,6 +242,8 @@ window.resetLines = () => { const it = byId(_sel); _edit[_sel] = toRows(it); _yi
 window.setYield = (v) => { _yield[_sel] = v; refreshDirty(); };
 window.setLine = (i, key, v) => {
   _edit[_sel][i][key] = v;
+  if (key === 'id' && v === OTHER) { _edit[_sel][i].u = _edit[_sel][i].u || '台斤'; }
+  if (key === 'id' && v !== OTHER) { delete _edit[_sel][i].name; }
   if (key === 'id' || key === 'u') { render(); return; }
   const cv = document.getElementById('conv-' + i);
   if (cv) cv.innerHTML = convText(_edit[_sel][i]);
@@ -262,10 +268,11 @@ window.saveRecipe = async () => {
   if (!(yieldQty > 0)) { showToast('「可以做出」的數量要大於 0', 'error'); return; }
   if (rows.some(r => r.id && !(Number(r.amt) > 0))) { showToast('食材用量要大於 0', 'error'); return; }
   if (rows.some(r => !r.id && Number(r.amt) > 0)) { showToast('有用量但沒選食材', 'error'); return; }
-  const noCatty = rows.find(r => r.id && r.u && !(byId(r.id)?.catty > 0));
+  if (rows.some(r => r.id === OTHER && !(r.name || '').trim())) { showToast('「其他」要填名稱，例如：水', 'error'); return; }
+  const noCatty = rows.find(r => r.id && r.id !== OTHER && r.u && !(byId(r.id)?.catty > 0));
 
   const recipe = cleanRecipe(rows);
-  const ids = recipe.map(r => r.id);
+  const ids = recipe.filter(r => r.id).map(r => r.id);
   if (new Set(ids).size !== ids.length) { showToast('同一個食材重複了，請合併成一行', 'error'); return; }
   if (recipeCycle(_items, it.id, recipe)) { showToast('配方繞回自己了，請檢查食材', 'error'); return; }
   const btn = document.getElementById('rcSave');

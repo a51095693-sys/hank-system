@@ -184,7 +184,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261008g";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261008h";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -277,7 +277,11 @@ window.renderTable = () => {
 
 const nameOf = (id) => _items.find(x => x.id === id);
 function recipeText(it) {
-  return it.recipe.map(r => { const c = nameOf(r.id); return c ? `${c.label} ${recipeAmtText(r, c)}` : ''; }).filter(Boolean).join('、');
+  return it.recipe.map(r => {
+    if (!r.id) return `${r.name} ${recipeAmtText(r)}`;
+    const c = nameOf(r.id);
+    return c ? `${c.label} ${recipeAmtText(r, c)}` : '';
+  }).filter(Boolean).join('、');
 }
 
 function rowHtml(it) {
