@@ -129,10 +129,31 @@ button.inv-li:hover{background:#FAFBF9}
 .inv-plan tr:hover td{background:none}
 .inv-plan .inv-big{height:48px;font-size:16px;border-radius:12px;margin-top:4px}
 #vDone{max-width:640px;margin:0 auto}
+.inv-sheet{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:12px}
+.inv-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line)}
+.inv-row:first-child{border-top:none}
+.inv-row:nth-child(even){background:#FAFBF9}
+.inv-row.done{background:#F1F8F4}
+.inv-row .no{font-size:14px;font-weight:700;color:#A8B0AA;text-align:center}
+.inv-row .nm{font-size:18px;font-weight:900;display:flex;align-items:center;gap:6px}
+.inv-row .sp{font-size:13px;color:var(--mute);margin-top:1px}
+.inv-row .qty{display:grid;grid-template-columns:repeat(2,112px);gap:8px}
+.inv-row .cell{display:flex;align-items:center;gap:6px;cursor:text}
+.inv-row .cell input{width:72px;height:46px;text-align:center;font-size:22px;font-weight:900;border:1.5px solid #C9CFC9;border-radius:10px;font-family:inherit;background:#fff;color:var(--ink);padding:0 4px;-moz-appearance:textfield}
+.inv-row .cell input::-webkit-outer-spin-button,.inv-row .cell input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.inv-row .cell input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(30,107,71,.15)}
+.inv-row.done .cell input{border-color:#9FD3B7}
+.inv-row .cell .u{font-size:15px;font-weight:700;color:var(--mute);min-width:28px}
+#vCount{max-width:820px}
+@media(max-width:520px){
+  .inv-row{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 12px}
+  .inv-row .no{display:none}
+  .inv-row .qty{grid-template-columns:repeat(2,92px);gap:6px}
+  .inv-row .cell input{width:58px}
+}
 @media(min-width:1000px){
   .inv-home{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
   .inv-top h1{font-size:34px}
-  #cList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;align-items:start}
 }
 @media(max-width:768px){.inv{max-width:none}.inv-top{margin-top:0}.inv-bar{top:60px}}
 </style>
@@ -505,7 +526,7 @@ function renderCount() {
   if (!kinds.includes(_cur.tab)) _cur.tab = kinds[0];
   renderTabs(all, kinds);
   const shown = all.filter(i => i.kind === _cur.tab);
-  document.getElementById('cList').innerHTML = shown.length ? shown.map(i => {
+  document.getElementById('cList').innerHTML = shown.length ? '<div class="inv-sheet">' + shown.map((i, k) => {
     const v = _cur.counts[i.id];
     const has = v !== undefined;
     const name = escHtml(i.label);
@@ -514,25 +535,20 @@ function renderCount() {
     if (i.per) {
       const { b, p } = has ? splitBox(v, i.per) : { b: '', p: '' };
       const big = escHtml(i.unit), small = escHtml(i.sub);
-      inputs = `<div class="inv-num"><input type="number" inputmode="numeric" min="0" step="1" value="${b}" placeholder="0" aria-label="${name} ${big}數" data-box ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">${big}</div></div>
-        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加一${big}">+</button>
-        <span class="plus-sign">＋</span>
-        <div class="inv-num pk"><input type="number" inputmode="decimal" min="0" step="any" value="${p}" placeholder="0" aria-label="${name} 零${small}數" data-pk ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">${small}</div></div>`;
+      inputs = `<label class="cell"><input type="number" inputmode="numeric" min="0" step="1" value="${b}" aria-label="${name} ${big}數" data-box ${keys} onchange="setBox('${i.id}')"><span class="u">${big}</span></label>
+        <label class="cell"><input type="number" inputmode="decimal" min="0" step="any" value="${p}" aria-label="${name} 零${small}數" data-pk ${keys} onchange="setBox('${i.id}')"><span class="u">${small}</span></label>`;
     } else {
-      inputs = `<div class="inv-num"><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="點我輸入" aria-label="${name} 數量" ${keys} onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
-        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>`;
+      inputs = `<label class="cell"><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" aria-label="${name} 數量" ${keys} onchange="setQty('${i.id}', this.value)"><span class="u">${escHtml(i.unit)}</span></label><span></span>`;
     }
-    return `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
+    return `<div class="inv-row${has ? ' done' : ''}" id="row-${i.id}">
+      <div class="no">${k + 1}</div>
       <div class="info">
         <div class="nm">${name}${has ? CHECK_MARK : ''}</div>
         ${i.spec ? `<div class="sp">${escHtml(i.spec)}</div>` : ''}
       </div>
-      <div class="inv-step">
-        <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少${i.per ? '一' + escHtml(i.unit) : ''}">−</button>
-        ${inputs}
-      </div>
+      <div class="qty">${inputs}</div>
     </div>`;
-  }).join('') : '<div class="card text-muted text-center">沒有要盤點的品項</div>';
+  }).join('') + '</div>' : '<div class="card text-muted text-center">沒有要盤點的品項</div>';
   updateProgress();
 }
 
