@@ -80,6 +80,7 @@
       <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：10份／盤"></div>
       <div><label class="form-label">安全庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="低於此數提醒"></div>
       <div id="iStockWrap"><label class="form-label">期初庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
+      <div id="iStockHint" class="hidden" style="grid-column:1/-1;font-size:12px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:8px 10px;"></div>
     </div>
     <div class="flex gap-2">
       <button class="btn btn-primary w-full" id="itemSaveBtn" onclick="saveItem()">儲存</button>
@@ -99,7 +100,7 @@
       <div class="flex gap-2 flex-wrap" id="mvTypes"></div>
     </div>
     <div style="margin-bottom:12px;">
-      <label class="form-label">數量 *</label>
+      <label class="form-label" id="mvQtyLabel">數量 *</label>
       <input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="mvQty" placeholder="輸入數量" style="font-size:18px;">
     </div>
     <div style="margin-bottom:16px;">
@@ -108,7 +109,7 @@
     </div>
     <div class="flex gap-2">
       <button class="btn btn-primary w-full" id="mvSaveBtn" onclick="saveMove()">登記</button>
-      <button class="btn btn-outline" onclick="closeModal('moveModal')">取消</button>
+      <button class="btn btn-outline" style="white-space:nowrap;" onclick="closeModal('moveModal')">取消</button>
     </div>
     <input type="hidden" id="mvId">
   </div>
@@ -173,7 +174,8 @@ const PRESET_ITEMS = [
 
 const MOVE_TYPES = [
   { key: '生產入庫', sign: 1 }, { key: '進貨', sign: 1 },
-  { key: '出貨', sign: -1 }, { key: '報廢', sign: -1 }, { key: '其他扣除', sign: -1 }
+  { key: '出貨', sign: -1 }, { key: '報廢', sign: -1 }, { key: '其他扣除', sign: -1 },
+  { key: '校正為', sign: 0 }
 ];
 
 let _ud = null;
@@ -277,6 +279,8 @@ window.openItem = (id) => {
   document.getElementById('iStock').value = '';
   // 已建立的品項只能透過「異動」或「盤點」改庫存，保留紀錄
   document.getElementById('iStockWrap').classList.toggle('hidden', !!it);
+  document.getElementById('iStockHint').classList.toggle('hidden', !it);
+  if (it) document.getElementById('iStockHint').textContent = `目前庫存 ${fmtQty(it.stock)} ${it.unit}。要修改庫存，請關閉後按該品項的「🔁 異動」→「＝ 校正為」。`;
   document.getElementById('itemModal').classList.add('open');
 };
 
@@ -317,8 +321,12 @@ window.saveItem = async () => {
 let _mvType = MOVE_TYPES[0].key;
 function renderMoveTypes() {
   document.getElementById('mvTypes').innerHTML = MOVE_TYPES.map(t =>
-    `<button type="button" class="btn btn-sm ${t.key === _mvType ? 'btn-primary' : 'btn-outline'}" onclick="pickMoveType('${t.key}')">${t.sign > 0 ? '＋' : '－'} ${t.key}</button>`
+    `<button type="button" class="btn btn-sm ${t.key === _mvType ? 'btn-primary' : 'btn-outline'}" onclick="pickMoveType('${t.key}')">${t.sign > 0 ? '＋' : t.sign < 0 ? '－' : '＝'} ${t.key}</button>`
   ).join('');
+  // 「校正為」輸入的是正確的庫存數量，不是加減量
+  const fix = _mvType === '校正為';
+  document.getElementById('mvQtyLabel').textContent = fix ? '正確的庫存數量 *' : '數量 *';
+  document.getElementById('mvQty').placeholder = fix ? '輸入實際應有的數量' : '輸入數量';
 }
 window.pickMoveType = (k) => { _mvType = k; renderMoveTypes(); };
 
@@ -337,12 +345,16 @@ window.openMove = (id) => {
 
 window.saveMove = async () => {
   const it = _items.find(x => x.id === document.getElementById('mvId').value);
-  const qty = parseFloat(document.getElementById('mvQty').value);
+  const input = parseFloat(document.getElementById('mvQty').value);
   if (!it) return;
-  if (!(qty > 0)) { showToast('請輸入大於 0 的數量', 'error'); return; }
-  const sign = MOVE_TYPES.find(t => t.key === _mvType).sign;
-  const after = Math.round((it.stock + sign * qty) * 1000) / 1000;
+  const fix = _mvType === '校正為';
+  if (fix ? !(input >= 0) : !(input > 0)) { showToast(fix ? '請輸入 0 以上的數量' : '請輸入大於 0 的數量', 'error'); return; }
+  const after = fix ? input : Math.round((it.stock + MOVE_TYPES.find(t => t.key === _mvType).sign * input) * 1000) / 1000;
   if (after < 0) { showToast(`庫存不足，目前只有 ${fmtQty(it.stock)} ${it.unit}`, 'error'); return; }
+  const delta = Math.round((after - it.stock) * 1000) / 1000;
+  if (delta === 0) { showToast('數量與目前庫存相同，不需要調整', 'error'); return; }
+  const sign = delta > 0 ? 1 : -1;
+  const qty = Math.abs(delta);
   const btn = document.getElementById('mvSaveBtn');
   btn.disabled = true; btn.textContent = '登記中…';
   try {
