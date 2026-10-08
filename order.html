@@ -100,7 +100,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261008l";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261008m";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -354,7 +354,10 @@ function renderResult() {
     const missing = _qtyAhead.slice(0, n - 1).some(q => !q);
     const tip = offToday(sup) ? `<span class="warn">⚠️ 週${WEEKDAYS[wd]}不送貨，這些要在送貨日一起叫</span>`
       : n > 1 ? `<span class="warn">下次送貨是週${WEEKDAYS[(wd + n) % 7]}，已含 ${n} 天的量（週${WEEKDAYS[wd]}～週${WEEKDAYS[(wd + n - 1) % 7]}）${missing ? '；之後幾天的叫貨量還沒輸入，先用這天的量估' : ''}</span>` : '';
-    return `<div class="od-sup">${escHtml(sup)}（${rows.length} 項）${tip}${cfg?.note ? `<span class="warn" style="color:#C9D2CC;">📝 ${escHtml(cfg.note)}</span>` : ''}</div>
+    // 要提前 2 天以上叫的廠商，提醒最晚哪天要叫
+    const lead = cfg?.lead || 1;
+    const leadTip = lead > 1 && date ? `<span class="warn">⏱️ 要提前 ${lead} 天叫：最晚 ${md(addDays(date, -lead))}（週${WEEKDAYS[dow(addDays(date, -lead))]}）要叫</span>` : '';
+    return `<div class="od-sup">${escHtml(sup)}（${rows.length} 項）${tip}${leadTip}${cfg?.note ? `<span class="warn" style="color:#C9D2CC;">📝 ${escHtml(cfg.note)}</span>` : ''}</div>
       <table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>預留</th><th>要叫</th></tr></thead><tbody>${rows.map(buyRow).join('')}</tbody></table>
       <button class="od-copy" onclick="copyBuy(${k})">複製「${escHtml(sup)}」叫貨單</button>`;
   }).join('');

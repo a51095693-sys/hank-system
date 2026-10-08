@@ -69,11 +69,12 @@ export async function loadStockItems(db) {
 // 廠商名單：suppliers 集合裡建立的廠商，加上品項上已填寫的廠商名稱（舊資料）
 export async function loadSuppliers(db, items = []) {
   const snap = await getDocs(collection(db, 'suppliers'));
+  // lead：要提前幾天叫（今天叫明天到＝1、今天叫後天到＝2）
   // rules：{品項id: { min: 最低叫貨量, with: 要搭配一起叫的品項id }}
   // off：不送貨的星期（0＝週日 … 6＝週六）；note：最低叫貨量、幾點前要叫等備註
-  const list = snap.docs.map(d => ({ id: d.id, name: d.data().name || '', off: d.data().off || [], note: d.data().note || '', rules: d.data().rules || {} })).filter(s => s.name);
+  const list = snap.docs.map(d => ({ id: d.id, name: d.data().name || '', off: d.data().off || [], note: d.data().note || '', rules: d.data().rules || {}, lead: Number(d.data().lead) || 1 })).filter(s => s.name);
   items.forEach(i => {
-    if (i.supplier && !list.some(s => s.name === i.supplier)) list.push({ id: '', name: i.supplier, off: [], note: '', rules: {} });
+    if (i.supplier && !list.some(s => s.name === i.supplier)) list.push({ id: '', name: i.supplier, off: [], note: '', rules: {}, lead: 1 });
   });
   return list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
 }

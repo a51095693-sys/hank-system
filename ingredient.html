@@ -130,7 +130,13 @@
     <div class="modal-title">🚚 送貨設定：<span id="supMName"></span></div>
     <label class="form-label">哪幾天有送貨（取消勾選＝休息）</label>
     <div class="sup-days" id="supDays"></div>
-    <p style="font-size:12px;color:var(--text2);margin:6px 0 14px;">休息日的前一天，叫貨計算會自動叫兩天的量。</p>
+    <p style="font-size:12px;color:var(--text2);margin:6px 0 14px;">送貨日叫的量會撐到下一次送貨日。</p>
+    <label class="form-label">要提前幾天叫</label>
+    <div class="flex gap-2 items-center" style="margin-bottom:14px;font-size:14px;">
+      <select class="form-control" id="supLead" style="width:auto;">
+        <option value="1">今天叫，明天到</option><option value="2">今天叫，後天到</option><option value="3">提前 3 天叫</option><option value="4">提前 4 天叫</option>
+      </select>
+    </div>
     <label class="form-label">叫貨規則（選填）</label>
     <div class="sup-rules" id="supRules"></div>
     <label class="form-label">叫貨備註</label>
@@ -185,7 +191,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261008l";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261008m";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -274,6 +280,7 @@ window.openSup = (k) => {
   document.getElementById('supDays').innerHTML = [...WEEKDAYS].map((d, i) =>
     `<label><input type="checkbox" value="${i}" ${sp.off.includes(i) ? '' : 'checked'}>${d}</label>`).join('');
   document.getElementById('supNote').value = sp.note;
+  document.getElementById('supLead').value = String(sp.lead || 1);
   const list = mine(sp.name);
   document.getElementById('supRules').innerHTML = list.length ? list.map(i => {
     const r = sp.rules[i.id] || {};
@@ -291,6 +298,7 @@ window.saveSup = async () => {
   const off = [...document.querySelectorAll('#supDays input')].filter(x => !x.checked).map(x => Number(x.value));
   if (off.length === 7) { showToast('至少要有一天送貨', 'error'); return; }
   const note = document.getElementById('supNote').value.trim();
+  const lead = Number(document.getElementById('supLead').value) || 1;
   const rules = {};
   document.querySelectorAll('#supRules .r').forEach(el => {
     const min = Math.max(0, parseFloat(el.querySelector('[data-min]').value) || 0);
@@ -301,8 +309,8 @@ window.saveSup = async () => {
   btn.disabled = true;
   try {
     // 舊資料的廠商（只寫在品項上）還沒有文件，這時候補建
-    if (sp.id) await updateDoc(doc(db, 'suppliers', sp.id), { off, note, rules });
-    else await addDoc(collection(db, 'suppliers'), { name: sp.name, off, note, rules, createdAt: serverTimestamp() });
+    if (sp.id) await updateDoc(doc(db, 'suppliers', sp.id), { off, note, rules, lead });
+    else await addDoc(collection(db, 'suppliers'), { name: sp.name, off, note, rules, lead, createdAt: serverTimestamp() });
     closeModal('supModal');
     showToast(`「${sp.name}」送貨設定已儲存`, 'success');
     loadAll();
@@ -388,7 +396,7 @@ window.renderSplit = () => {
   title.innerHTML = `${escHtml(_sel)}<span class="cnt">${list.length} 項</span>`;
   const sp = _sups[k];
   document.getElementById('spInfo').innerHTML = sp
-    ? `<span class="${sp.off.length ? 'off' : ''}">🚚 ${escHtml(offText(sp.off) || '每天送貨')}</span>${sp.note ? `<span>📝 ${escHtml(sp.note)}</span>` : ''}${ruleText(sp) ? `<span>📏 ${escHtml(ruleText(sp))}</span>` : ''}` : '';
+    ? `<span class="${sp.off.length ? 'off' : ''}">🚚 ${escHtml(offText(sp.off) || '每天送貨')}</span>${sp.lead > 1 ? `<span>⏱️ 要提前 ${sp.lead} 天叫</span>` : ''}${sp.note ? `<span>📝 ${escHtml(sp.note)}</span>` : ''}${ruleText(sp) ? `<span>📏 ${escHtml(ruleText(sp))}</span>` : ''}` : '';
   acts.innerHTML = (sp ? `<button class="btn btn-sm btn-outline" onclick="openSup(${k})">🚚 送貨設定</button>` : '') +
     `<button class="btn btn-primary btn-sm" onclick="openItem('', ${k})">＋ 新增食材</button>` +
     (k >= 0 && !list.length ? `<button class="btn btn-sm btn-outline" onclick="delSupplier(${k})">刪除這個廠商</button>` : '');
