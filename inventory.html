@@ -274,7 +274,6 @@ window.saveDraft = (notify) => {
 };
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
 
-const isLow = (it) => it.safety > 0 && it.stock < it.safety;
 
 // 與 loadStockItems 相同，另外帶出 counted（是否盤點過）
 async function loadItems() {
@@ -360,30 +359,28 @@ async function loadHome() {
   body.innerHTML = `<div class="inv-home"><div>${html}</div><div>${stockCard('目前庫存', lastCountText())}</div></div>`;
 }
 
-// 完整庫存清單：全部品項的目前數量，低於安全庫存標示
+// 完整庫存清單：全部品項的目前數量
 function stockCard(title, sub) {
-  const low = _items.filter(isLow).length;
   return `<div class="inv-plan">
     <div class="hrow" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div class="lab" style="font-size:15px;font-weight:700;color:#fff;">${escHtml(title)}（${_items.length} 項）</div>
-      ${low ? `<span class="hd" style="font-size:13px;">${svg(IC.warn, 16, 2.2)}${low} 項不足</span>` : ''}
     </div>
     ${sub ? `<div class="lab" style="margin-top:-6px;">${escHtml(sub)}</div>` : ''}
     <table>
       <thead><tr><th>品名</th><th>目前庫存</th></tr></thead>
       <tbody>${_items.map(i => `<tr>
         <td>${escHtml(i.name)}</td>
-        <td>${isLow(i) ? `<b>${escHtml(qtyText(i, i.stock))}</b>` : `<span style="color:#fff;">${escHtml(qtyText(i, i.stock))}</span>`}</td>
+        <td style="color:#fff;">${escHtml(qtyText(i, i.stock))}</td>
       </tr>`).join('')}</tbody>
     </table>
     <button class="inv-big go" onclick="copyStock()">複製庫存</button>
   </div>`;
 }
 
-// 複製成可以貼到 LINE 的文字；低於安全庫存的加註 ⚠️
+// 複製成可以貼到 LINE 的文字
 let _copyHeader = '';
 function stockText(header, rows) {
-  return `【庫存】${header}\n${rows.map(r => `${r.name} ${qtyText(r.u, r.qty)}${r.low ? ' ⚠️' : ''}`).join('\n')}`;
+  return `【庫存】${header}\n${rows.map(r => `${r.name} ${qtyText(r.u, r.qty)}`).join('\n')}`;
 }
 async function copyText(text) {
   try {
@@ -396,7 +393,7 @@ async function copyText(text) {
 window.copyStock = () => {
   const now = new Date();
   const header = _copyHeader || `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  copyText(stockText(header, _items.map(i => ({ name: i.name, u: i, qty: i.stock, low: isLow(i) }))));
+  copyText(stockText(header, _items.map(i => ({ name: i.name, u: i, qty: i.stock }))));
 };
 
 window.backHome = () => loadHome();
