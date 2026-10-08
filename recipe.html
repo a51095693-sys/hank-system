@@ -14,26 +14,45 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-.rc{max-width:1120px}
-.rc-sec{font-size:15px;font-weight:800;color:var(--text2);margin:18px 4px 10px}
-.rc-grid{display:grid;grid-template-columns:1fr;gap:14px}
-@media(min-width:1000px){.rc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.rc-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
-.rc-card.dirty{border-color:#3FBF7F;box-shadow:0 0 0 2px rgba(63,191,127,.25)}
-.rc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.rc-head h3{font-size:18px;font-weight:900}
-.rc-head .per{font-size:13px;color:var(--text2);margin-top:2px}
-.rc-tag{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
-.rc-tag.none{background:#FDF1E6;color:#8A3D08}
-.rc-tag.ok{background:#E3F2EA;color:#1E6B47}
-.rc-line{display:flex;align-items:center;gap:8px}
-.rc-line select{flex:1;min-width:0;height:44px}
-.rc-line input{width:96px;height:44px;font-size:16px}
-.rc-line .u{font-size:13px;color:var(--text2);min-width:40px}
-.rc-empty{font-size:13px;color:var(--text3)}
-.rc-used{font-size:12px;color:var(--text2)}
-.rc-foot{display:flex;gap:8px;margin-top:2px}
-.rc-foot .btn{height:40px}
+.rc-wrap{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start}
+.rc-side{background:#fff;border:1px solid var(--border);border-radius:16px;overflow:hidden;position:sticky;top:16px}
+.rc-side .ttl{font-size:13px;font-weight:800;color:var(--text2);padding:12px 14px 6px}
+.rc-nav{display:flex;flex-direction:column;padding:4px 6px 8px}
+.rc-nav button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:10px;border:none;background:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;color:var(--text1);text-align:left;cursor:pointer}
+.rc-nav button:hover{background:var(--surface2)}
+.rc-nav button.on{background:#17201B;color:#fff}
+.rc-st{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;flex-shrink:0}
+.rc-st.none{background:#FDF1E6;color:#8A3D08}
+.rc-st.ok{background:#E3F2EA;color:#1E6B47}
+.rc-st.buy{background:var(--surface2);color:var(--text2)}
+.rc-nav button.on .rc-st{background:rgba(255,255,255,.15);color:#BFE8D0}
+.rc-dot{width:8px;height:8px;border-radius:50%;background:#3FBF7F;flex-shrink:0}
+.rc-main{background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px;min-width:0}
+.rc-main.dirty{border-color:#3FBF7F;box-shadow:0 0 0 2px rgba(63,191,127,.25)}
+.rc-mhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.rc-mhead h2{font-size:20px;font-weight:900}
+.rc-mhead .per{font-size:14px;color:var(--text2)}
+.rc-tbl{width:100%;border-collapse:collapse}
+.rc-tbl th{text-align:left}
+.rc-tbl td{padding:8px 10px}
+.rc-tbl select,.rc-tbl input{height:44px}
+.rc-tbl input{width:110px;font-size:16px}
+.rc-tbl tr:hover td{background:none}
+.rc-u{font-size:13px;color:var(--text2);white-space:nowrap}
+.rc-empty{font-size:14px;color:var(--text3);padding:18px 4px}
+.rc-info{font-size:14px;color:var(--text2);background:var(--surface2);border-radius:12px;padding:14px 16px;line-height:1.7}
+.rc-used{font-size:12px;color:var(--text2);margin-top:12px}
+.rc-foot{display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.rc-foot .btn{height:42px}
+.rc-hint{font-size:12px;color:#1E6B47;font-weight:700}
+@media(max-width:900px){
+  .rc-wrap{grid-template-columns:1fr}
+  .rc-side{position:static}
+  .rc-side .ttl{display:none}
+  .rc-nav{flex-direction:row;overflow-x:auto;gap:6px;padding:8px}
+  .rc-nav button{width:auto;white-space:nowrap;padding:8px 12px;background:var(--surface2)}
+  .rc-tbl input{width:80px}
+}
 </style>
 </head>
 <body>
@@ -50,10 +69,14 @@
     <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
   </aside>
   <main class="main">
-    <div class="rc">
-      <div class="page-title">🧪 配方設定</div>
-      <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:8px;">設定每 1 單位成品、半成品要用多少材料。叫貨計算會依配方一層層推算要做多少、要叫多少食材。</p>
-      <div id="rcBody"><div class="text-muted">載入中…</div></div>
+    <div class="page-title">🧪 配方設定</div>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">設定每 1 單位成品要用多少食材。叫貨計算會依配方算出要叫多少食材。</p>
+    <div class="rc-wrap">
+      <aside class="rc-side">
+        <div class="ttl">成品</div>
+        <nav class="rc-nav" id="rcNav" aria-label="成品"><span class="text-muted" style="padding:10px;font-size:13px;">載入中…</span></nav>
+      </aside>
+      <section class="rc-main" id="rcMain"><div class="text-muted">載入中…</div></section>
     </div>
   </main>
 </div>
@@ -64,7 +87,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, recipeCycle } from "./app.js?v=20261008c";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased } from "./app.js?v=20261008d";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -75,10 +98,13 @@ window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); wi
 
 let _ud = null;
 let _items = [];
-// 編輯中的配方 {品項id: [{ id, qty }]}，與已儲存的不同時卡片標示為未儲存
+// 編輯中的配方 {成品id: [{ id, qty }]}，與已儲存的不同時標示為未儲存
 let _edit = {};
+const SEL_KEY = 'rc_sel';
+let _sel = (() => { try { return localStorage.getItem(SEL_KEY) || ''; } catch (e) { return ''; } })();
 const byId = (id) => _items.find(i => i.id === id);
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const products = () => _items.filter(i => i.kind === '成品');
+const materials = () => _items.filter(i => i.kind === '食材');
 
 onAuthStateChanged(auth, async user => {
   if (!user) { window.location.href = 'index.html'; return; }
@@ -90,110 +116,125 @@ onAuthStateChanged(auth, async user => {
 
 // 離開頁面前提醒還沒儲存的配方
 window.addEventListener('beforeunload', e => {
-  if (_items.some(i => isDirty(i))) { e.preventDefault(); e.returnValue = ''; }
+  if (products().some(isDirty)) { e.preventDefault(); e.returnValue = ''; }
 });
 
 async function loadAll() {
   try { _items = await loadStockItems(db); }
-  catch (e) { document.getElementById('rcBody').innerHTML = '<div class="card text-muted text-center">載入失敗，請重新整理</div>'; return; }
+  catch (e) { document.getElementById('rcMain').innerHTML = '<div class="text-muted">載入失敗，請重新整理</div>'; return; }
   _edit = {};
-  _items.forEach(i => { _edit[i.id] = i.recipe.map(r => ({ ...r })); });
+  products().forEach(i => { _edit[i.id] = i.recipe.map(r => ({ ...r })); });
   render();
 }
 
 const cleanRecipe = (rows) => rows.filter(r => r.id && Number(r.qty) > 0).map(r => ({ id: r.id, qty: Number(r.qty) }));
-const isDirty = (it) => _edit[it.id] && !same(_edit[it.id].map(r => ({ id: r.id, qty: Number(r.qty) || 0 })), it.recipe);
+const isDirty = (it) => _edit[it.id] && JSON.stringify(_edit[it.id].map(r => ({ id: r.id, qty: Number(r.qty) || 0 }))) !== JSON.stringify(it.recipe);
+const usedBy = (id) => _items.filter(i => i.recipe.some(r => r.id === id)).map(i => i.label);
 
-function usedBy(id) {
-  return _items.filter(i => i.recipe.some(r => r.id === id)).map(i => i.name);
-}
-
-function card(it) {
-  const rows = _edit[it.id];
-  const opts = _items.filter(x => x.id !== it.id && x.kind !== '成品');
-  const used = usedBy(it.id);
-  const lines = rows.length ? rows.map((r, i) => {
-    const c = byId(r.id);
-    return `<div class="rc-line">
-      <select class="form-control" aria-label="${escHtml(it.name)} 材料 ${i + 1}" onchange="setLine('${it.id}', ${i}, 'id', this.value)">
-        <option value="">選擇材料</option>
-        <optgroup label="半成品">${opts.filter(o => o.kind === '半成品').map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}</optgroup>
-        <optgroup label="食材">${opts.filter(o => o.kind === '食材').map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}</optgroup>
-      </select>
-      <input type="number" min="0" step="any" inputmode="decimal" class="form-control" aria-label="${escHtml(it.name)} 材料 ${i + 1} 數量" placeholder="數量" value="${r.qty || ''}" oninput="setLine('${it.id}', ${i}, 'qty', this.value)">
-      <span class="u">${c ? escHtml(c.unit) : ''}</span>
-      <button type="button" class="btn btn-sm btn-outline" aria-label="移除" onclick="removeLine('${it.id}', ${i})">✕</button>
-    </div>`;
-  }).join('') : '<div class="rc-empty">尚未設定材料</div>';
-  const dirty = isDirty(it);
-  return `<div class="rc-card${dirty ? ' dirty' : ''}" id="card-${it.id}">
-    <div class="rc-head">
-      <div><h3>${escHtml(it.name)}</h3><div class="per">每 1 ${escHtml(it.unit)} 需要</div></div>
-      ${it.recipe.length ? `<span class="rc-tag ok">已設定 ${it.recipe.length} 項</span>` : it.supplier ? `<span class="rc-tag ok">外購：${escHtml(it.supplier)}</span>` : '<span class="rc-tag none">尚未設定</span>'}
-    </div>
-    ${lines}
-    ${used.length ? `<div class="rc-used">用在：${escHtml(used.join('、'))}</div>` : ''}
-    <div class="rc-foot">
-      <button type="button" class="btn btn-outline btn-sm" onclick="addLine('${it.id}')">＋ 加入材料</button>
-      <span style="flex:1;"></span>
-      ${dirty ? `<button type="button" class="btn btn-outline btn-sm" onclick="resetCard('${it.id}')">還原</button>` : ''}
-      <button type="button" class="btn btn-primary btn-sm" id="save-${it.id}" onclick="saveCard('${it.id}')" ${dirty ? '' : 'disabled'}>儲存</button>
-    </div>
-  </div>`;
+function status(it) {
+  if (it.recipe.length) return `<span class="rc-st ok">已設定 ${it.recipe.length} 項</span>`;
+  if (isPurchased(it)) return '<span class="rc-st buy">外購</span>';
+  return '<span class="rc-st none">未設定</span>';
 }
 
 function render() {
-  const groups = [['成品', '成品（店面叫貨的品項）'], ['半成品', '半成品（央廚自製）']];
-  const html = groups.map(([k, label]) => {
-    const list = _items.filter(i => i.kind === k);
-    if (!list.length) return '';
-    return `<div class="rc-sec">${label}</div><div class="rc-grid">${list.map(card).join('')}</div>`;
-  }).join('');
-  const hasMaterial = _items.some(i => i.kind !== '成品');
-  document.getElementById('rcBody').innerHTML = (html || '<div class="card text-muted text-center">還沒有成品或半成品</div>') +
-    (hasMaterial ? '' : '<div class="card text-muted" style="margin-top:12px;font-size:13px;">還沒有半成品或食材可以當材料，請先到「🥬 食材」新增食材。</div>');
+  const list = products();
+  if (!list.some(p => p.id === _sel)) _sel = list[0]?.id || '';
+  // 左：成品清單（未儲存的標綠點）
+  document.getElementById('rcNav').innerHTML = list.length ? list.map(p =>
+    `<button type="button" class="${p.id === _sel ? 'on' : ''}" aria-current="${p.id === _sel}" onclick="pick('${p.id}')">
+      <span style="display:flex;align-items:center;gap:6px;min-width:0;">${isDirty(p) ? '<span class="rc-dot" title="尚未儲存"></span>' : ''}<span>${escHtml(p.label)}</span></span>${status(p)}
+    </button>`).join('') : '<span class="text-muted" style="padding:10px;font-size:13px;">還沒有成品</span>';
+  renderMain();
 }
 
-function rerender(id) {
-  const it = byId(id);
-  const el = document.getElementById('card-' + id);
-  if (it && el) el.outerHTML = card(it);
-}
-
-window.addLine = (id) => { _edit[id].push({ id: '', qty: '' }); rerender(id); };
-window.removeLine = (id, i) => { _edit[id].splice(i, 1); rerender(id); };
-window.resetCard = (id) => { _edit[id] = byId(id).recipe.map(r => ({ ...r })); rerender(id); };
-window.setLine = (id, i, key, v) => {
-  _edit[id][i][key] = v;
-  if (key === 'id') { rerender(id); return; }
-  // 輸入數量時不重繪整張卡片，避免游標跳掉；只更新未儲存狀態與按鈕
-  const it = byId(id);
+function renderMain() {
+  const main = document.getElementById('rcMain');
+  const it = byId(_sel);
+  if (!it) { main.className = 'rc-main'; main.innerHTML = '<div class="rc-empty">請先到「🗃️ 品項庫存」建立成品</div>'; return; }
+  const rows = _edit[it.id];
   const dirty = isDirty(it);
-  document.getElementById('card-' + id)?.classList.toggle('dirty', dirty);
-  const btn = document.getElementById('save-' + id);
+  main.className = 'rc-main' + (dirty ? ' dirty' : '');
+  const used = usedBy(it.id);
+
+  // 外購且沒有配方：不用設定
+  if (isPurchased(it) && !rows.length) {
+    main.innerHTML = `<div class="rc-mhead"><h2>${escHtml(it.label)}</h2></div>
+      <div class="rc-info">這是向「${escHtml(it.supplier)}」叫貨的外購成品，不需要設定配方。<br>叫貨計算會直接算成要跟這家廠商叫多少。</div>`;
+    return;
+  }
+
+  const mats = materials();
+  const body = rows.length ? `<div class="table-wrap"><table class="rc-tbl">
+      <thead><tr><th>食材</th><th>數量</th><th>單位</th><th></th></tr></thead>
+      <tbody>${rows.map((r, i) => {
+        const c = byId(r.id);
+        return `<tr>
+          <td data-label="食材"><select class="form-control" aria-label="第 ${i + 1} 項食材" onchange="setLine(${i}, 'id', this.value)">
+            <option value="">選擇食材</option>
+            ${mats.map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}
+          </select></td>
+          <td data-label="數量"><input type="number" min="0" step="any" inputmode="decimal" class="form-control" aria-label="第 ${i + 1} 項數量" placeholder="數量" value="${r.qty || ''}" oninput="setLine(${i}, 'qty', this.value)"></td>
+          <td data-label="單位" class="rc-u">${c ? escHtml(c.unit) : '-'}</td>
+          <td><button type="button" class="btn btn-sm btn-outline" aria-label="移除第 ${i + 1} 項" onclick="removeLine(${i})">✕</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>` : `<div class="rc-empty">還沒有設定食材，按下方「＋ 加入食材」開始。</div>`;
+
+  main.innerHTML = `
+    <div class="rc-mhead"><h2>${escHtml(it.label)}</h2><span class="per">每 1 ${escHtml(it.unit)} 需要</span></div>
+    ${body}
+    ${mats.length ? '' : '<div class="rc-info" style="margin-top:10px;">還沒有食材可以選，請先到「🥬 食材」新增。</div>'}
+    ${used.length ? `<div class="rc-used">用在：${escHtml(used.join('、'))}</div>` : ''}
+    <div class="rc-foot">
+      <button type="button" class="btn btn-outline" onclick="addLine()" ${mats.length ? '' : 'disabled'}>＋ 加入食材</button>
+      <span style="flex:1;"></span>
+      ${dirty ? '<span class="rc-hint">尚未儲存</span><button type="button" class="btn btn-outline" onclick="resetLines()">還原</button>' : ''}
+      <button type="button" class="btn btn-primary" id="rcSave" onclick="saveRecipe()" ${dirty ? '' : 'disabled'}>儲存配方</button>
+    </div>`;
+}
+
+window.pick = (id) => {
+  _sel = id;
+  try { localStorage.setItem(SEL_KEY, id); } catch (e) {}
+  render();
+};
+window.addLine = () => { _edit[_sel].push({ id: '', qty: '' }); render(); };
+window.removeLine = (i) => { _edit[_sel].splice(i, 1); render(); };
+window.resetLines = () => { _edit[_sel] = byId(_sel).recipe.map(r => ({ ...r })); render(); };
+window.setLine = (i, key, v) => {
+  _edit[_sel][i][key] = v;
+  if (key === 'id') { render(); return; }
+  // 輸入數量時不重繪表格，避免游標跳掉；只更新未儲存狀態
+  const it = byId(_sel);
+  const dirty = isDirty(it);
+  document.getElementById('rcMain').classList.toggle('dirty', dirty);
+  const btn = document.getElementById('rcSave');
   if (btn) btn.disabled = !dirty;
+  const navBtn = document.querySelector(`#rcNav button[aria-current="true"] > span`);
+  if (navBtn) navBtn.innerHTML = (dirty ? '<span class="rc-dot" title="尚未儲存"></span>' : '') + `<span>${escHtml(it.label)}</span>`;
 };
 
-window.saveCard = async (id) => {
-  const it = byId(id);
-  const rows = _edit[id];
-  if (rows.some(r => r.id && !(Number(r.qty) > 0))) { showToast('材料數量要大於 0', 'error'); return; }
-  if (rows.some(r => !r.id && Number(r.qty) > 0)) { showToast('有數量但沒選材料', 'error'); return; }
+window.saveRecipe = async () => {
+  const it = byId(_sel);
+  const rows = _edit[_sel];
+  if (rows.some(r => r.id && !(Number(r.qty) > 0))) { showToast('食材數量要大於 0', 'error'); return; }
+  if (rows.some(r => !r.id && Number(r.qty) > 0)) { showToast('有數量但沒選食材', 'error'); return; }
   const recipe = cleanRecipe(rows);
   const ids = recipe.map(r => r.id);
-  if (new Set(ids).size !== ids.length) { showToast('同一個材料重複了，請合併成一行', 'error'); return; }
-  if (recipeCycle(_items, id, recipe)) { showToast('配方繞回自己了，請檢查材料', 'error'); return; }
-  const btn = document.getElementById('save-' + id);
+  if (new Set(ids).size !== ids.length) { showToast('同一個食材重複了，請合併成一行', 'error'); return; }
+  if (recipeCycle(_items, it.id, recipe)) { showToast('配方繞回自己了，請檢查食材', 'error'); return; }
+  const btn = document.getElementById('rcSave');
   btn.disabled = true; btn.textContent = '儲存中…';
   try {
-    await updateDoc(doc(db, 'stockItems', id), { recipe });
+    await updateDoc(doc(db, 'stockItems', it.id), { recipe });
     it.recipe = recipe;
-    _edit[id] = recipe.map(r => ({ ...r }));
-    showToast(`「${it.name}」配方已儲存`, 'success');
+    _edit[it.id] = recipe.map(r => ({ ...r }));
+    showToast(`「${it.label}」配方已儲存`, 'success');
     render();
   } catch (e) {
     showToast('儲存失敗，請重試', 'error');
-    btn.disabled = false; btn.textContent = '儲存';
+    btn.disabled = false; btn.textContent = '儲存配方';
   }
 };
 </script>

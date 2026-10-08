@@ -208,7 +208,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261008c";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261008d";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -232,7 +232,7 @@ const IC = {
 const CHECK_MARK = svg(IC.check, 18, 3, '#1E6B47');
 
 const COUNT_TYPES = {
-  // 每日盤點包含成品、半成品、食材，叫貨計算才有完整庫存（key 沿用「成品」以相容舊紀錄）
+  // 每日盤點包含成品與食材，叫貨計算才有完整庫存（key 沿用「成品」以相容舊紀錄）
   '成品': { title: '每日盤點', ic: IC.box, kinds: KINDS, partial: false },
   '抽盤': { title: '臨時抽盤', ic: IC.search, kinds: KINDS, partial: true }
 };

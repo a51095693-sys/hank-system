@@ -54,7 +54,7 @@
   </aside>
   <main class="main">
     <div class="page-title">🗃️ 品項庫存</div>
-    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">管理成品與半成品。配方請到「🧪 配方設定」，要叫貨的食材請到「🥬 食材」。</p>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">管理成品。配方請到「🧪 配方設定」，要叫貨的食材請到「🥬 食材」。</p>
 
     <div class="stat-grid">
       <div class="card" style="margin-bottom:0;"><div style="font-size:28px;font-weight:800;" id="stTotal">-</div><div style="font-size:12px;color:var(--text2);">品項數</div></div>
@@ -176,7 +176,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers } from "./app.js?v=20261008c";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers } from "./app.js?v=20261008d";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -311,7 +311,6 @@ window.importPreset = async () => {
 
 const KIND_HINT = {
   '成品': '店面會叫貨的品項，叫貨計算時輸入叫貨量。',
-  '半成品': '央廚自己做、用來做成品的品項（例如預煮雞肉）。',
   '食材': '改成食材後，這個品項會移到「🥬 食材」頁管理。'
 };
 let _kind = '成品';

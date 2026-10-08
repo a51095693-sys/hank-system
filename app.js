@@ -3,12 +3,15 @@ import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/fireba
 
 export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福','新莊'];
 
-// 成品：店面叫貨的品項；半成品：央廚自製、用來做成品；食材：向廠商叫貨
-export const KINDS = ['成品', '半成品', '食材'];
+// 成品：店面叫貨的品項；食材：向廠商叫貨
+// 「半成品」已停用：資料保留在資料庫，但 loadStockItems 不回傳，所有畫面都不顯示
+export const KINDS = ['成品', '食材'];
+const HIDDEN_KINDS = ['半成品'];
 
 export async function loadStockItems(db) {
   const snap = await getDocs(collection(db, 'stockItems'));
   return snap.docs
+    .filter(d => !HIDDEN_KINDS.includes(d.data().kind))
     .map(d => {
       const e = d.data();
       const kind = e.kind === '原物料' ? '食材' : (KINDS.includes(e.kind) ? e.kind : '成品');
