@@ -36,6 +36,12 @@
 .sup-days label:has(input:checked){background:#E3F2EA;border-color:#9FD3B7;color:#1E6B47}
 .sp-info{font-size:13px;color:var(--text2);margin:-6px 0 12px;display:flex;gap:6px 14px;flex-wrap:wrap}
 .sp-info:empty{display:none}
+.sup-rules{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;font-size:13px}
+.sup-rules .r{border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.sup-rules .r b{font-size:14px}
+.sup-rules .r div{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sup-rules input{width:80px;height:34px}
+.sup-rules select{height:34px;width:auto;flex:1;min-width:0}
 .sp-info .off{color:#8A3D08;font-weight:700}
 @media(max-width:900px){
   .sp-wrap{grid-template-columns:1fr}
@@ -125,6 +131,8 @@
     <label class="form-label">哪幾天有送貨（取消勾選＝休息）</label>
     <div class="sup-days" id="supDays"></div>
     <p style="font-size:12px;color:var(--text2);margin:6px 0 14px;">休息日的前一天，叫貨計算會自動叫兩天的量。</p>
+    <label class="form-label">叫貨規則（選填）</label>
+    <div class="sup-rules" id="supRules"></div>
     <label class="form-label">叫貨備註</label>
     <textarea class="form-control" id="supNote" rows="3" placeholder="例如：最低叫貨 3000 元、前一天晚上 9 點前叫" style="margin-bottom:16px;resize:vertical;"></textarea>
     <div class="flex gap-2">
@@ -177,7 +185,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261008k";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261008l";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -248,6 +256,14 @@ window.delSupplier = async (k) => {
   }
 };
 
+// 叫貨規則摘要，例：「滷肉最少 5 箱、油蔥酥要搭配滷肉」
+const ruleText = (sp) => Object.entries(sp.rules || {}).map(([id, r]) => {
+  const it = _items.find(i => i.id === id);
+  if (!it) return '';
+  const w = _items.find(i => i.id === r.with);
+  return [r.min > 0 ? `${it.name}最少 ${fmtQty(r.min)} ${it.unit}` : '', w ? `${it.name}要搭配${w.name}` : ''].filter(Boolean).join('、');
+}).filter(Boolean).join('、');
+
 // ── 廠商送貨設定 ──
 let _supK = -1;
 window.openSup = (k) => {
@@ -258,6 +274,15 @@ window.openSup = (k) => {
   document.getElementById('supDays').innerHTML = [...WEEKDAYS].map((d, i) =>
     `<label><input type="checkbox" value="${i}" ${sp.off.includes(i) ? '' : 'checked'}>${d}</label>`).join('');
   document.getElementById('supNote').value = sp.note;
+  const list = mine(sp.name);
+  document.getElementById('supRules').innerHTML = list.length ? list.map(i => {
+    const r = sp.rules[i.id] || {};
+    const others = list.filter(o => o.id !== i.id);
+    return `<div class="r" data-id="${i.id}"><b>${escHtml(i.name)}</b>
+      <div>最低一次叫 <input type="number" min="0" step="any" inputmode="decimal" class="form-control" data-min value="${r.min > 0 ? r.min : ''}" placeholder="不限"> ${escHtml(i.unit)}</div>
+      ${others.length ? `<div>不能單獨叫，要搭配 <select class="form-control" data-with><option value="">（可以單獨叫）</option>${others.map(o => `<option value="${o.id}" ${r.with === o.id ? 'selected' : ''}>${escHtml(o.name)}</option>`).join('')}</select></div>` : ''}
+    </div>`;
+  }).join('') : '<span class="text-muted">這家廠商還沒有品項</span>';
   document.getElementById('supModal').classList.add('open');
 };
 window.saveSup = async () => {
@@ -266,12 +291,18 @@ window.saveSup = async () => {
   const off = [...document.querySelectorAll('#supDays input')].filter(x => !x.checked).map(x => Number(x.value));
   if (off.length === 7) { showToast('至少要有一天送貨', 'error'); return; }
   const note = document.getElementById('supNote').value.trim();
+  const rules = {};
+  document.querySelectorAll('#supRules .r').forEach(el => {
+    const min = Math.max(0, parseFloat(el.querySelector('[data-min]').value) || 0);
+    const w = el.querySelector('[data-with]')?.value || '';
+    if (min > 0 || w) rules[el.dataset.id] = { min, with: w };
+  });
   const btn = document.getElementById('supSaveBtn');
   btn.disabled = true;
   try {
     // 舊資料的廠商（只寫在品項上）還沒有文件，這時候補建
-    if (sp.id) await updateDoc(doc(db, 'suppliers', sp.id), { off, note });
-    else await addDoc(collection(db, 'suppliers'), { name: sp.name, off, note, createdAt: serverTimestamp() });
+    if (sp.id) await updateDoc(doc(db, 'suppliers', sp.id), { off, note, rules });
+    else await addDoc(collection(db, 'suppliers'), { name: sp.name, off, note, rules, createdAt: serverTimestamp() });
     closeModal('supModal');
     showToast(`「${sp.name}」送貨設定已儲存`, 'success');
     loadAll();
@@ -357,7 +388,7 @@ window.renderSplit = () => {
   title.innerHTML = `${escHtml(_sel)}<span class="cnt">${list.length} 項</span>`;
   const sp = _sups[k];
   document.getElementById('spInfo').innerHTML = sp
-    ? `<span class="${sp.off.length ? 'off' : ''}">🚚 ${escHtml(offText(sp.off) || '每天送貨')}</span>${sp.note ? `<span>📝 ${escHtml(sp.note)}</span>` : ''}` : '';
+    ? `<span class="${sp.off.length ? 'off' : ''}">🚚 ${escHtml(offText(sp.off) || '每天送貨')}</span>${sp.note ? `<span>📝 ${escHtml(sp.note)}</span>` : ''}${ruleText(sp) ? `<span>📏 ${escHtml(ruleText(sp))}</span>` : ''}` : '';
   acts.innerHTML = (sp ? `<button class="btn btn-sm btn-outline" onclick="openSup(${k})">🚚 送貨設定</button>` : '') +
     `<button class="btn btn-primary btn-sm" onclick="openItem('', ${k})">＋ 新增食材</button>` +
     (k >= 0 && !list.length ? `<button class="btn btn-sm btn-outline" onclick="delSupplier(${k})">刪除這個廠商</button>` : '');
