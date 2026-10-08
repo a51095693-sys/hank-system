@@ -33,6 +33,9 @@ body{background:#F3F4F1}
 .inv-hero .sub{font-size:15px;color:#C9D2CC}
 .inv-hero .ttl{font-size:24px;font-weight:900}
 .inv-pill{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px}
+.inv-group{grid-column:1/-1;font-size:15px;font-weight:900;color:var(--ink);margin:14px 4px 8px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+.inv-group:first-child{margin-top:2px}
+.inv-plan tr.grp td{color:#F5C04A;font-weight:800;font-size:13px;padding-top:12px}
 .inv-remind{background:#FFF7E0;border:1px solid #F5C04A;border-radius:14px;padding:12px 16px;margin-bottom:16px;font-size:15px;line-height:1.7;color:#17201B}
 .inv-slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .inv-slot{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);color:#fff;font-family:inherit;text-align:left;cursor:pointer}
@@ -372,7 +375,7 @@ function stockCard(title, sub) {
     ${sub ? `<div class="lab" style="margin-top:-6px;">${escHtml(sub)}</div>` : ''}
     <table>
       <thead><tr><th>品名</th><th>目前庫存</th></tr></thead>
-      <tbody>${_items.map(i => `<tr>
+      <tbody>${_items.map((i, k) => `${k === 0 || _items[k - 1].kind !== i.kind ? `<tr class="grp"><td colspan="2">${escHtml(i.kind)}</td></tr>` : ''}<tr>
         <td>${escHtml(i.label)}</td>
         <td style="color:#fff;">${escHtml(qtyText(i, i.stock))}</td>
       </tr>`).join('')}</tbody>
@@ -384,7 +387,13 @@ function stockCard(title, sub) {
 // 複製成可以貼到 LINE 的文字
 let _copyHeader = '';
 function stockText(header, rows) {
-  return `【庫存】${header}\n${rows.map(r => `${r.name}：${qtyText(r.u, r.qty)}`).join('\n')}`;
+  // 依種類分段：〔成品〕、〔食材〕
+  const lines = rows.map((r, k) => {
+    const kind = r.u?.kind || '';
+    const head = kind && (k === 0 || rows[k - 1].u?.kind !== kind) ? `${k ? '\n' : ''}〔${kind}〕\n` : '';
+    return `${head}${r.name}：${qtyText(r.u, r.qty)}`;
+  });
+  return `【庫存】${header}\n${lines.join('\n')}`;
 }
 async function copyText(text) {
   try {
@@ -466,7 +475,8 @@ function openCount() {
 
 function renderCount() {
   const shown = countItems();
-  document.getElementById('cList').innerHTML = shown.length ? shown.map(i => {
+  document.getElementById('cList').innerHTML = shown.length ? shown.map((i, k) => {
+    const head = k === 0 || shown[k - 1].kind !== i.kind ? `<div class="inv-group">${escHtml(i.kind)}</div>` : '';
     const v = _cur.counts[i.id];
     const has = v !== undefined;
     const name = escHtml(i.label);
@@ -483,7 +493,7 @@ function renderCount() {
       inputs = `<div class="inv-num"><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="點我輸入" aria-label="${name} 數量" ${keys} onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
         <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>`;
     }
-    return `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
+    return head + `<div class="inv-item${has ? ' done' : ''}" id="row-${i.id}">
       <div class="info">
         <div class="nm">${name}${has ? CHECK_MARK : ''}</div>
         ${i.spec ? `<div class="sp">${escHtml(i.spec)}</div>` : ''}
