@@ -98,6 +98,7 @@
       <div><label class="form-label">預留量</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="至少要留多少"></div>
       <div id="iStockWrap"><label class="form-label">目前庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
     </div>
+    <div id="iErr" class="hidden" role="alert" style="font-size:13px;color:var(--danger);background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:8px 10px;margin:-6px 0 12px;"></div>
     <div class="flex gap-2">
       <button class="btn btn-primary w-full" id="itemSaveBtn" onclick="saveItem()">儲存</button>
       <button class="btn btn-outline" onclick="closeModal('itemModal')">取消</button>
@@ -149,7 +150,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers } from "./app.js?v=20261008b";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers } from "./app.js?v=20261008c";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -303,6 +304,7 @@ window.renderSplit = () => {
 window.openItem = (id, supIdx) => {
   const it = id ? _items.find(x => x.id === id) : null;
   document.getElementById('itemTitle').textContent = it ? '✏️ 編輯食材' : '＋ 新增食材';
+  formErr('');
   document.getElementById('iId').value = it ? it.id : '';
   document.getElementById('iName').value = it ? it.name : '';
   // 從廠商卡片按「新增食材」時自動帶入該廠商
@@ -318,16 +320,27 @@ window.openItem = (id, supIdx) => {
   document.getElementById('itemModal').classList.add('open');
 };
 
+function formErr(msg) {
+  const el = document.getElementById('iErr');
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
+}
+
 window.saveItem = async () => {
   const id = document.getElementById('iId').value;
   const name = document.getElementById('iName').value.trim();
   const unit = document.getElementById('iUnit').value.trim();
-  if (!name) { showToast('請輸入食材名稱', 'error'); return; }
-  if (!unit) { showToast('請輸入單位', 'error'); return; }
-  if (_items.some(x => x.id !== id && x.name === name)) { showToast('已有相同名稱的品項', 'error'); return; }
+  const supplier = document.getElementById('iSupplier').value.trim();
+  if (!name) { formErr('請輸入食材名稱'); return; }
+  if (!unit) { formErr('請輸入單位'); return; }
+  // 不同廠商可以有同名品項；同一家廠商內不能重複
+  if (_items.some(x => x.id !== id && x.name === name && x.supplier === supplier)) {
+    formErr(`「${supplier || '未設定廠商'}」已經有「${name}」了，請換一個名稱`); return;
+  }
+  formErr('');
   const data = {
     name, unit,
-    supplier: document.getElementById('iSupplier').value.trim(),
+    supplier,
     spec: document.getElementById('iSpec').value.trim(),
     safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
   };

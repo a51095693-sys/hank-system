@@ -64,7 +64,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, recipeCycle } from "./app.js?v=20261008b";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, recipeCycle } from "./app.js?v=20261008c";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -117,8 +117,8 @@ function card(it) {
     return `<div class="rc-line">
       <select class="form-control" aria-label="${escHtml(it.name)} 材料 ${i + 1}" onchange="setLine('${it.id}', ${i}, 'id', this.value)">
         <option value="">選擇材料</option>
-        <optgroup label="半成品">${opts.filter(o => o.kind === '半成品').map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.name)}</option>`).join('')}</optgroup>
-        <optgroup label="食材">${opts.filter(o => o.kind === '食材').map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.name)}</option>`).join('')}</optgroup>
+        <optgroup label="半成品">${opts.filter(o => o.kind === '半成品').map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}</optgroup>
+        <optgroup label="食材">${opts.filter(o => o.kind === '食材').map(o => `<option value="${o.id}" ${o.id === r.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}</optgroup>
       </select>
       <input type="number" min="0" step="any" inputmode="decimal" class="form-control" aria-label="${escHtml(it.name)} 材料 ${i + 1} 數量" placeholder="數量" value="${r.qty || ''}" oninput="setLine('${it.id}', ${i}, 'qty', this.value)">
       <span class="u">${c ? escHtml(c.unit) : ''}</span>

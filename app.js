@@ -24,6 +24,11 @@ export async function loadStockItems(db) {
       };
       return { ...item, ...subUnit(item) };
     })
+    // 不同廠商可以有同名品項；同名時顯示名稱加上廠商以便區分（label）
+    .map((i, _, all) => ({
+      ...i,
+      label: i.supplier && all.some(o => o.id !== i.id && o.name === i.name) ? `${i.name}（${i.supplier}）` : i.name
+    }))
     .sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
 }
 

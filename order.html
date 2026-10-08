@@ -99,7 +99,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008b";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008c";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -168,7 +168,7 @@ function renderInputs() {
       inputs = `<input type="number" inputmode="decimal" min="0" step="any" value="${v || ''}" placeholder="0" aria-label="${escHtml(i.name)} 叫貨量" data-big ${keys} oninput="setQty('${i.id}')"><span class="u">${escHtml(i.unit)}</span>`;
     }
     return `<div class="od-row" id="orow-${i.id}">
-      <div class="nm">${escHtml(i.name)}<div class="stk">央廚庫存 ${escHtml(qtyText(i, i.stock))}</div></div>
+      <div class="nm">${escHtml(i.label)}<div class="stk">央廚庫存 ${escHtml(qtyText(i, i.stock))}</div></div>
       <div class="od-in">${inputs}</div>
     </div>`;
   }).join('');
@@ -259,7 +259,7 @@ function renderResult() {
   const { make, buy } = _plan;
   const hasOrder = Object.keys(_qty).length > 0;
   const makeRows = make.map(m => `<tr>
-    <td>${escHtml(m.it.name)}${m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : ''}</td>
+    <td>${escHtml(m.it.label)}${m.noRecipe ? '<span class="warn">尚未設定配方，材料沒有算進去</span>' : ''}</td>
     <td>${escHtml(qtyText(m.it, m.need))}</td>
     <td>${escHtml(qtyText(m.it, m.it.stock))}</td>
     <td><b>${escHtml(qtyText(m.it, m.q))}</b></td>
@@ -308,7 +308,7 @@ window.copyBuy = (k) => {
 };
 window.copyMake = () => {
   const date = document.getElementById('odDate').value;
-  copyText(`【生產單】${md(date)}\n${_plan.make.map(m => `${m.it.name}：${qtyText(m.it, m.q)}`).join('\n')}`);
+  copyText(`【生產單】${md(date)}\n${_plan.make.map(m => `${m.it.label}：${qtyText(m.it, m.q)}`).join('\n')}`);
 };
 </script>
 </body>

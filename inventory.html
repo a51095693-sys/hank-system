@@ -208,7 +208,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261008b";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261008c";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -368,7 +368,7 @@ function stockCard(title, sub) {
     <table>
       <thead><tr><th>品名</th><th>目前庫存</th></tr></thead>
       <tbody>${_items.map(i => `<tr>
-        <td>${escHtml(i.name)}</td>
+        <td>${escHtml(i.label)}</td>
         <td style="color:#fff;">${escHtml(qtyText(i, i.stock))}</td>
       </tr>`).join('')}</tbody>
     </table>
@@ -392,7 +392,7 @@ async function copyText(text) {
 window.copyStock = () => {
   const now = new Date();
   const header = _copyHeader || `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  copyText(stockText(header, _items.map(i => ({ name: i.name, u: i, qty: i.stock }))));
+  copyText(stockText(header, _items.map(i => ({ name: i.label, u: i, qty: i.stock }))));
 };
 
 window.backHome = () => loadHome();
@@ -464,7 +464,7 @@ function renderCount() {
   document.getElementById('cList').innerHTML = shown.length ? shown.map(i => {
     const v = _cur.counts[i.id];
     const has = v !== undefined;
-    const name = escHtml(i.name);
+    const name = escHtml(i.label);
     const keys = `onfocus="this.select()" onkeydown="nextOnEnter(event)"`;
     let inputs;
     if (i.per) {
@@ -547,7 +547,7 @@ window.setQty = (id, val) => {
     row.classList.toggle('done', has);
     const nm = row.querySelector('.nm');
     const it = _items.find(i => i.id === id);
-    if (nm && it) nm.innerHTML = escHtml(it.name) + (has ? CHECK_MARK : '');
+    if (nm && it) nm.innerHTML = escHtml(it.label) + (has ? CHECK_MARK : '');
   }
   updateProgress();
 };
@@ -557,7 +557,7 @@ window.saveCount = async () => {
   const list = countItems();
   const missing = list.filter(i => _cur.counts[i.id] === undefined);
   if (!COUNT_TYPES[_cur.type].partial && missing.length) {
-    showToast(`還有 ${missing.length} 項沒盤：${missing.slice(0, 3).map(i => i.name).join('、')}${missing.length > 3 ? '…' : ''}`, 'error');
+    showToast(`還有 ${missing.length} 項沒盤：${missing.slice(0, 3).map(i => i.label).join('、')}${missing.length > 3 ? '…' : ''}`, 'error');
     const first = document.getElementById('row-' + missing[0].id);
     if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
