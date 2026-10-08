@@ -17,7 +17,7 @@ a{text-decoration:none;color:inherit}
 .sb-user{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1)}
 .uname{font-size:13px;font-weight:600;color:#fff}
 .urole{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
-.main{margin-left:220px;padding:24px;flex:1}
+.main{margin-left:220px;padding:24px;flex:1;min-width:0}
 
 /* Mobile */
 .mob-header{display:none;align-items:center;justify-content:space-between;padding:12px 16px;background:#17201B;color:#fff;position:sticky;top:0;z-index:99}
@@ -37,7 +37,7 @@ a{text-decoration:none;color:inherit}
 textarea.form-control{resize:vertical;min-height:72px}
 
 /* Buttons */
-.btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;display:inline-flex;align-items:center;gap:5px}
+.btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{filter:brightness(1.05)}
 .btn-outline{background:#fff;color:var(--text2);border:1.5px solid var(--border)}.btn-outline:hover{border-color:var(--text2)}
 .btn-danger{background:var(--danger);color:#fff}
@@ -54,7 +54,7 @@ tr:last-child td{border-bottom:none}
 tr:hover td{background:#FAFBF9}
 
 /* Badges */
-.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
 .badge-待處理{background:#FEE2E2;color:var(--danger)}
 .badge-處理中{background:#FEF3C7;color:var(--warning)}
 .badge-已結案{background:#E3F2EA;color:var(--success)}

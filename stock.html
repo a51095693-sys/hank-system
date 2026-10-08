@@ -13,6 +13,24 @@
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+#itemTable td:not(:first-child){white-space:nowrap}
+/* 電腦視窗較窄（769–1100px）時品項改成兩欄卡片，按鈕不會被擠到畫面外 */
+@media(min-width:769px) and (max-width:1100px){
+  .table-wrap:has(#itemTable) table,.table-wrap:has(#itemTable) thead,#itemTable,#itemTable tr{display:block}
+  .table-wrap:has(#itemTable) thead{display:none}
+  #itemTable{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  #itemTable tr{border:1px solid var(--border);border-radius:12px;padding:6px 14px 12px;background:#fff}
+  #itemTable tr:hover td{background:none}
+  #itemTable td{display:flex;justify-content:space-between;align-items:center;gap:12px;border:none;border-top:1px solid var(--surface2);padding:7px 0;white-space:normal}
+  #itemTable td:first-child{border-top:none;font-size:15px}
+  #itemTable td::before{content:attr(data-label);font-weight:700;font-size:11px;color:var(--text2);flex-shrink:0}
+  #itemTable td:first-child::before{display:none}
+  #itemTable td:not([data-label]){display:inline-flex;border-top:none;padding:8px 8px 0 0}
+  #itemTable tr:has(td[colspan]){grid-column:1/-1}
+  #itemTable td[colspan]{display:block}
+}
+</style>
 </head>
 <body>
 <div class="mob-header">
