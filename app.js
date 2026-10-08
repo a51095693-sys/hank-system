@@ -180,19 +180,23 @@ export function renderSidebar(ud, activePage, auth) {
   const isAdmin = ud.role === 'admin';
   const isManager = ud.role === 'manager';
   const canReview = isAdmin || isManager;
-  const pages = isAdmin
-    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存'],['recipe.html','🧪','配方設定'],['ingredient.html','🥬','食材'],['account.html','👥','帳號管理']]
-    : isManager
-    ? [['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['stock.html','🗃️','品項庫存'],['recipe.html','🧪','配方設定'],['ingredient.html','🥬','食材']]
-    : [];
+  // 分組：每天要做的事放最上面，設定類放下面
+  const pages = (isAdmin || isManager) ? [
+    '每天',
+    ['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],
+    '設定',
+    ['stock.html','🗃️','品項庫存'],['recipe.html','🧪','配方設定'],['ingredient.html','🥬','食材與廠商'],
+    ...(isAdmin ? ['管理', ['account.html','👥','帳號管理']] : [])
+  ] : [];
 
   const nav = document.getElementById('sb-nav');
   if (nav) {
-    nav.innerHTML = pages.map(([href, ic, label]) =>
-      `<a href="${href}" class="nav-item${href===activePage?' active':''}"><span class="ic">${ic}</span>${label}</a>`
+    nav.innerHTML = pages.map(p => typeof p === 'string'
+      ? `<div class="nav-group">${p}</div>`
+      : `<a href="${p[0]}" class="nav-item${p[0]===activePage?' active':''}"><span class="ic">${p[1]}</span>${p[2]}</a>`
     ).join('');
     if (canReview) {
-      nav.innerHTML += `<button class="nav-item" onclick="openPwdModal()"><span class="ic">🔒</span>修改密碼</button>`;
+      nav.innerHTML += `<div class="nav-group">帳號</div><button class="nav-item" onclick="openPwdModal()"><span class="ic">🔒</span>修改密碼</button>`;
     }
     nav.innerHTML += `<button class="nav-item" onclick="doSignOut()"><span class="ic">🚪</span>登出</button>`;
   }

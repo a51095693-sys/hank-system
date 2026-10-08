@@ -10,7 +10,7 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261009a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -19,6 +19,14 @@
 .od-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:4px 4px 16px}
 .od-top h1{font-size:30px;font-weight:900;letter-spacing:1px;line-height:1.2}
 .od-top .sub{font-size:14px;color:var(--mute)}
+.od-steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.od-steps span{font-size:13px;font-weight:700;color:var(--green);background:#E3F2EA;border-radius:999px;padding:4px 10px}
+.step{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-size:13px;font-weight:900;margin-right:8px;vertical-align:2px}
+.od-res .step{background:var(--green2);color:#0E2A1C}
+.od-jump{display:none;font-size:14px;font-weight:700;color:var(--green);margin:-4px 0 10px}
+@media (max-width:999px){.od-jump{display:inline-block}}
+.od-sum{font-size:14px;color:#fff;background:rgba(63,191,127,.15);border-radius:10px;padding:10px 12px;line-height:1.6}
+.od-sum b{color:#F5C04A}
 .od-date{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--mute)}
 .od-date input{width:auto;height:44px;font-size:16px;font-weight:700;background:#fff}
 .od-grid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
@@ -43,9 +51,9 @@
 .od-res h2{font-size:17px;font-weight:900;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .od-res h2 small{font-size:12px;font-weight:500;color:#9AA59F}
 .od-res table{width:100%;border-collapse:collapse;font-size:15px}
-.od-res th{background:none;border:none;padding:4px 0 6px;font-size:12px;font-weight:500;color:#9AA59F;text-align:right;white-space:nowrap}
-.od-res td{border:none;border-top:1px solid rgba(255,255,255,.1);padding:8px 0;text-align:right;color:#C9D2CC;white-space:nowrap}
-.od-res th:first-child,.od-res td:first-child{text-align:left}
+.od-res th{background:none;border:none;padding:4px 0 6px 10px;font-size:12px;font-weight:500;color:#9AA59F;text-align:right;white-space:nowrap}
+.od-res td{border:none;border-top:1px solid rgba(255,255,255,.1);padding:8px 0 8px 10px;text-align:right;color:#C9D2CC;white-space:nowrap}
+.od-res th:first-child,.od-res td:first-child{text-align:left;padding-left:0}
 .od-res td:first-child{color:#fff;font-weight:700;white-space:normal}
 .od-res tr:hover td{background:none}
 .od-res b{color:#F5C04A;font-weight:900}
@@ -79,16 +87,17 @@
   <main class="main">
     <div class="od">
       <div class="od-top">
-        <div><div class="sub">輸入店面叫貨量，扣掉現有庫存，算出要做多少、要叫多少食材</div><h1>叫貨計算</h1></div>
-        <label class="od-date">叫貨日期 <input type="date" class="form-control" id="odDate" onchange="loadOrder()"></label>
+        <div><h1>🧾 叫貨計算</h1><div class="od-steps"><span>① 輸入店面要的量</span><span>② 照「今天要叫的貨」打給廠商</span><span>③ 照生產單做</span></div></div>
+        <label class="od-date">店面要貨日 <input type="date" class="form-control" id="odDate" onchange="loadOrder()"></label>
       </div>
 
       <div class="od-grid">
         <section class="od-card">
-          <h2>店面叫貨量</h2>
-          <div class="hint">所有店面加起來的總量，空白代表 0</div>
+          <h2><span class="step">1</span>店面要的量</h2>
+          <div class="hint">所有店面加起來的總量，空白代表 0；輸完按最下面「儲存」</div>
+          <a class="od-jump" href="#odResult">↓ 直接看今天要叫的貨</a>
           <div id="odList"><div class="text-muted">載入中…</div></div>
-          <button class="od-save" id="odSave" onclick="saveOrder()">儲存叫貨量</button>
+          <button class="od-save" id="odSave" onclick="saveOrder()">儲存</button>
           <div style="font-size:12px;color:var(--mute);margin-top:8px;" id="odSaved"></div>
         </section>
 
@@ -104,7 +113,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261008m";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261009a";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -233,11 +242,12 @@ window.saveOrder = async () => {
     await setDoc(doc(db, 'orders', date), { date, qty: _qty, by: _ud.name, at: serverTimestamp() });
     showToast(`已儲存 ${md(date)} 叫貨量`, 'success');
     document.getElementById('odSaved').textContent = `已儲存：${_ud.name} 剛剛`;
+    if (window.innerWidth < 1000) document.getElementById('odResult').scrollIntoView({ behavior: 'smooth' });
     if (date > TODAY) { if (Object.keys(_qty).length) _days[date] = _qty; else delete _days[date]; renderResult(); }
   } catch (e) {
     showToast('儲存失敗，請重試', 'error');
   } finally {
-    btn.disabled = false; btn.textContent = '儲存叫貨量';
+    btn.disabled = false; btn.textContent = '儲存';
   }
 };
 
@@ -412,12 +422,19 @@ function renderResult() {
     <td>${m.it.safety > 0 ? escHtml(qtyText(m.it, m.it.safety)) : '-'}</td>
     <td><b>${escHtml(qtyText(m.it, m.q))}</b></td>
   </tr>`).join('');
+  const call = now.filter(t => !t.none && t.rows.length);
+  const empty = now.length && now.every(t => t.none);
+  const sum = empty
+    ? `<div class="od-sum">還沒輸入店面要的量。在左邊輸入 <b>${md(addDays(TODAY, 1))}</b> 的量，這裡就會算出每家要叫多少。<br><span style="color:#9AA59F;">今天要叫的廠商：${now.map(t => escHtml(t.sup)).join('、')}</span></div>`
+    : call.length ? `<div class="od-sum">今天要打給 <b>${call.length} 家</b>：${call.map(t => escHtml(t.sup)).join('、')}</div>`
+    : now.length ? '<div class="od-sum">庫存都夠，今天不用叫貨 👍</div>' : '';
   document.getElementById('odResult').innerHTML = `
-    <h2>今天要叫的貨 <small>${wk(TODAY)}</small></h2>
-    ${now.length ? now.map(t => supCard(t, _today.indexOf(t))).join('') : '<div class="none">今天沒有廠商要叫貨</div>'}
+    <h2><span><span class="step">2</span>今天要叫的貨</span> <small>${wk(TODAY)}</small></h2>
+    ${sum}
+    ${empty ? '' : now.length ? now.map(t => supCard(t, _today.indexOf(t))).join('') : '<div class="none">今天沒有廠商要叫貨</div>'}
     ${later.length ? `<div class="od-later">今天不用叫：${later.map(t => `<div><b style="color:#fff;">${escHtml(t.sup)}</b> 下次 ${wk(t.nextOrder)}叫，${wk(t.nextArrive)}到</div>`).join('')}</div>` : ''}
-    <h2 style="margin-top:6px;">${date ? md(date) + ' ' : ''}要生產的成品</h2>
-    ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>安全庫存</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
+    <h2 style="margin-top:6px;"><span><span class="step">3</span>${date ? md(date) + ' ' : ''}要生產的成品</span></h2>
+    ${makeRows ? `<table><thead><tr><th>品項</th><th>需要</th><th>庫存</th><th>預留</th><th>要做</th></tr></thead><tbody>${makeRows}</tbody></table>
       <button class="od-copy ghost" onclick="copyMake()">複製生產單</button>`
       : `<div class="none">${hasOrder ? '庫存足夠，不用生產' : '左邊輸入叫貨量後會自動計算'}</div>`}
     <div class="od-note">計算方式：每家廠商依「今天叫幾天後到」「到貨後要撐到下次到貨」算出這段期間的店面叫貨量，扣掉到貨前會先出掉的量，再補足安全庫存（預留），套用最低叫貨量後無條件進位。庫存以最近一次盤點為準。</div>`;

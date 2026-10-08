@@ -10,7 +10,7 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261009a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -21,6 +21,8 @@
 .rc-nav button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:10px;border:none;background:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;color:var(--text1);text-align:left;cursor:pointer}
 .rc-nav button:hover{background:var(--surface2)}
 .rc-nav button.on{background:#17201B;color:#fff}
+.rc-grp{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:1px;padding:14px 10px 4px;border-top:1px solid var(--border);margin-top:6px}
+.rc-grp~button{opacity:.75}
 .rc-st{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;flex-shrink:0}
 .rc-st.none{background:#FDF1E6;color:#8A3D08}
 .rc-st.ok{background:#E3F2EA;color:#1E6B47}
@@ -94,7 +96,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased, recipeQty, qtyText, fmtQty, WEIGHT_UNITS } from "./app.js?v=20261008m";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, recipeCycle, isPurchased, recipeQty, qtyText, fmtQty, WEIGHT_UNITS } from "./app.js?v=20261009a";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -174,10 +176,14 @@ function render() {
   const list = products();
   if (!list.some(p => p.id === _sel)) _sel = list[0]?.id || '';
   // 左：成品清單（未儲存的標綠點）
-  document.getElementById('rcNav').innerHTML = list.length ? list.map(p =>
+  const btn = (p) =>
     `<button type="button" class="${p.id === _sel ? 'on' : ''}" aria-current="${p.id === _sel}" onclick="pick('${p.id}')">
       <span style="display:flex;align-items:center;gap:6px;min-width:0;">${isDirty(p) ? '<span class="rc-dot" title="尚未儲存"></span>' : ''}<span>${escHtml(p.label)}</span></span>${status(p)}
-    </button>`).join('') : '<span class="text-muted" style="padding:10px;font-size:13px;">還沒有成品</span>';
+    </button>`;
+  const own = list.filter(p => !isPurchased(p) || p.recipe.length), buy = list.filter(p => !own.includes(p));
+  document.getElementById('rcNav').innerHTML = list.length
+    ? own.map(btn).join('') + (buy.length ? `<div class="rc-grp">外購（不用設定配方）</div>` + buy.map(btn).join('') : '')
+    : '<span class="text-muted" style="padding:10px;font-size:13px;">還沒有成品</span>';
   renderMain();
 }
 
@@ -226,7 +232,7 @@ function renderMain() {
       <span>${escHtml(it.unit)} ${escHtml(it.label)}</span>
       <label class="rc-batch"><input type="checkbox" ${_batch[it.id] ? 'checked' : ''} onchange="setBatch(this.checked)">一次至少做一整批，不能拆開做</label></div>
     ${body}
-    ${mats.length ? '' : '<div class="rc-info" style="margin-top:10px;">還沒有食材可以選，請先到「🥬 食材」新增。</div>'}
+    ${mats.length ? '' : '<div class="rc-info" style="margin-top:10px;">還沒有食材可以選，請先到「🥬 食材與廠商」新增。</div>'}
     ${used.length ? `<div class="rc-used">用在：${escHtml(used.join('、'))}</div>` : ''}
     <div class="rc-foot">
       <button type="button" class="btn btn-outline" onclick="addLine()" ${mats.length ? '' : 'disabled'}>＋ 加入食材</button>

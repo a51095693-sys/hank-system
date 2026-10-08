@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>央廚盤點 - 食材</title>
+<title>央廚盤點 - 食材與廠商</title>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
 <link rel="preconnect" href="https://firestore.googleapis.com">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261009a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -68,7 +68,7 @@
     <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
   </aside>
   <main class="main">
-    <div class="page-title">🥬 食材</div>
+    <div class="page-title">🥬 食材與廠商</div>
     <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">向廠商叫貨的食材。叫貨計算會依配方算出需要量，再補足到「預留量」。</p>
 
     <div class="sp-wrap">
@@ -120,6 +120,7 @@
       <button class="btn btn-primary w-full" id="itemSaveBtn" onclick="saveItem()">儲存</button>
       <button class="btn btn-outline" onclick="closeModal('itemModal')">取消</button>
     </div>
+    <button type="button" class="del-link hidden" id="iDelBtn" onclick="closeModal('itemModal'); openDel(document.getElementById('iId').value)">🗑 刪除這個食材</button>
     <input type="hidden" id="iId">
   </div>
 </div>
@@ -191,7 +192,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261008m";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261009a";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -352,8 +353,7 @@ function rowHtml(i, withSup) {
     <td><div class="flex gap-2">
       <button class="btn btn-sm btn-primary" onclick="openIn('${i.id}')">📥 進貨</button>
       ${isIng
-        ? `<button class="btn btn-sm btn-outline" onclick="openItem('${i.id}')">編輯</button>
-           <button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" aria-label="刪除 ${escHtml(i.name)}" onclick="openDel('${i.id}')">刪除</button>`
+        ? `<button class="btn btn-sm btn-outline" onclick="openItem('${i.id}')">編輯</button>`
         : '<a class="btn btn-sm btn-outline" href="stock.html" title="外購成品請到品項庫存編輯">編輯</a>'}
     </div></td>
   </tr>`;
@@ -411,6 +411,7 @@ window.openItem = (id, supIdx) => {
   document.getElementById('itemTitle').textContent = it ? '✏️ 編輯食材' : '＋ 新增食材';
   formErr('');
   document.getElementById('iId').value = it ? it.id : '';
+  document.getElementById('iDelBtn').classList.toggle('hidden', !it);
   document.getElementById('iName').value = it ? it.name : '';
   // 從廠商卡片按「新增食材」時自動帶入該廠商
   document.getElementById('iSupplier').value = it ? it.supplier : (_sups[supIdx]?.name || '');

@@ -10,9 +10,13 @@ a{text-decoration:none;color:inherit}
 .sb-brand h2{font-size:15px;font-weight:700;color:#fff}
 .sb-brand p{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
 .sb-nav{padding:12px 0;flex:1}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;color:rgba(255,255,255,.65);font-size:13px;font-weight:500;cursor:pointer;transition:.15s;background:none;border:none;width:100%;text-align:left;font-family:inherit}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;color:rgba(255,255,255,.7);font-size:14px;font-weight:500;cursor:pointer;transition:.15s;background:none;border:none;width:100%;text-align:left;font-family:inherit}
 .nav-item:hover,.nav-item.active{background:rgba(255,255,255,.1);color:#fff}
 .nav-item.active{border-left:3px solid #3FBF7F}
+.del-link{display:block;margin:14px auto 0;background:none;border:none;color:var(--danger);font-family:inherit;font-size:13px;text-decoration:underline;cursor:pointer}
+.del-link.hidden{display:none}
+.nav-group{padding:14px 20px 4px;font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.35)}
+.nav-group:first-child{padding-top:4px}
 .ic{font-size:16px;width:20px;text-align:center}
 .sb-user{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1)}
 .uname{font-size:13px;font-weight:600;color:#fff}

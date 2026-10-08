@@ -10,7 +10,7 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261009a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -54,7 +54,7 @@
   </aside>
   <main class="main">
     <div class="page-title">🗃️ 品項庫存</div>
-    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">管理成品。配方請到「🧪 配方設定」，要叫貨的食材請到「🥬 食材」。</p>
+    <p style="font-size:13px;color:var(--text3);margin-top:-12px;margin-bottom:16px;">管理成品。配方請到「🧪 配方設定」，要叫貨的食材請到「🥬 食材與廠商」。</p>
 
     <div class="stat-grid">
       <div class="card" style="margin-bottom:0;"><div style="font-size:28px;font-weight:800;" id="stTotal">-</div><div style="font-size:12px;color:var(--text2);">品項數</div></div>
@@ -69,7 +69,7 @@
           <input type="checkbox" id="filterLow" onchange="renderTable()" style="cursor:pointer;">只看庫存不足
         </label>
         <span style="flex:1;"></span>
-        <button class="btn btn-outline btn-sm" onclick="openMoves()">📜 異動紀錄</button>
+        <button class="btn btn-outline btn-sm" onclick="openMoves()">📜 庫存紀錄</button>
         <button class="btn btn-primary btn-sm" id="addItemBtn" onclick="openItem()">＋ 新增品項</button>
       </div>
       <div class="table-wrap">
@@ -124,6 +124,7 @@
       <button class="btn btn-primary w-full" id="itemSaveBtn" onclick="saveItem()">儲存</button>
       <button class="btn btn-outline" onclick="closeModal('itemModal')">取消</button>
     </div>
+    <button type="button" class="del-link hidden" id="iDelBtn" onclick="closeModal('itemModal'); openDel(document.getElementById('iId').value)">🗑 刪除這個品項</button>
     <input type="hidden" id="iId">
   </div>
 </div>
@@ -193,7 +194,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261008m";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261009a";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -305,10 +306,9 @@ function rowHtml(it) {
     <td data-label="規格" style="font-size:12px;color:var(--text2);">${escHtml(it.spec) || '-'}</td>
     <td data-label="安全庫存" style="color:var(--text2);">${it.safety > 0 ? escHtml(qtyText(it, it.safety)) : '-'}</td>
     <td data-label="目前庫存" style="font-weight:700;${isLow(it) ? 'color:var(--danger);' : ''}">${escHtml(qtyText(it, it.stock))}${isLow(it) ? ' ⚠️' : ''}</td>
-    <td><button class="btn btn-sm btn-primary" onclick="openMove('${it.id}')">🔁 異動</button></td>
+    <td><button class="btn btn-sm btn-primary" onclick="openMove('${it.id}')">± 調整庫存</button></td>
     <td><div class="flex gap-2">
       <button class="btn btn-sm btn-outline" onclick="openItem('${it.id}')">編輯</button>
-      <button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDel('${it.id}')">刪除</button>
     </div></td>
   </tr>`;
 }
@@ -334,7 +334,7 @@ window.importPreset = async () => {
 
 const KIND_HINT = {
   '成品': '店面會叫貨的品項，叫貨計算時輸入叫貨量。',
-  '食材': '改成食材後，這個品項會移到「🥬 食材」頁管理。'
+  '食材': '改成食材後，這個品項會移到「🥬 食材與廠商」頁管理。'
 };
 let _kind = '成品';
 let _editId = '';
@@ -366,6 +366,7 @@ window.openItem = (id) => {
   }).catch(() => {});
   document.getElementById('itemModalTitle').textContent = it ? '✏️ 編輯品項' : '＋ 新增品項';
   document.getElementById('iId').value = it ? it.id : '';
+  document.getElementById('iDelBtn').classList.toggle('hidden', !it);
   document.getElementById('iName').value = it ? it.name : '';
   document.getElementById('iUnit').value = it ? it.unit : '';
   document.getElementById('iSpec').value = it ? it.spec : '';
@@ -374,7 +375,7 @@ window.openItem = (id) => {
   // 已建立的品項只能透過「異動」或「盤點」改庫存，保留紀錄
   document.getElementById('iStockWrap').classList.toggle('hidden', !!it);
   document.getElementById('iStockHint').classList.toggle('hidden', !it);
-  if (it) document.getElementById('iStockHint').textContent = `目前庫存 ${qtyText(it, it.stock)}。要修改庫存，請關閉後按該品項的「🔁 異動」→「＝ 校正為」。`;
+  if (it) document.getElementById('iStockHint').textContent = `目前庫存 ${qtyText(it, it.stock)}。要修改庫存，請關閉後按該品項的「± 調整庫存」→「＝ 校正為」。`;
   document.getElementById('itemModal').classList.add('open');
 };
 
