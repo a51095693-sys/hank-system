@@ -330,32 +330,35 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
 
 const isLow = (it) => it.safety > 0 && it.stock < it.safety;
 
-// 與 loadStockItems 相同，另外帶出 counted（是否盤點過）與每箱包數
+// 與 loadStockItems 相同，另外帶出 counted（是否盤點過）與大小單位換算
 async function loadItems() {
   const [items, snap] = await Promise.all([loadStockItems(db), getDocs(collection(db, 'stockItems'))]);
   const counted = new Set(snap.docs.filter(d => d.data().lastCountAt).map(d => d.id));
-  return items.map(i => ({ ...i, counted: counted.has(i.id), per: packsPerBox(i) }));
+  return items.map(i => ({ ...i, counted: counted.has(i.id), ...subUnit(i) }));
 }
 
-// 單位是「箱」且規格寫「N包／箱」時，盤點改成箱＋包兩格
-function packsPerBox(i) {
-  if (i.unit !== '箱') return 0;
-  const m = /(\d+)\s*包\s*[／/]\s*箱/.exec(i.spec || '');
-  return m ? parseInt(m[1], 10) : 0;
+// 規格寫「N小單位／大單位」且大單位就是品項單位時（例：7包／箱、2.5小鍋／長鍋），
+// 盤點改成「大單位＋小單位」兩格；per = 每個大單位等於幾個小單位
+function subUnit(i) {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*([^\d\s／/]+)\s*[／/]\s*(\S+?)\s*$/.exec(i.spec || '');
+  if (!m || m[3] !== i.unit || m[2] === i.unit) return { per: 0, sub: '' };
+  const per = parseFloat(m[1]);
+  return per > 1 ? { per, sub: m[2] } : { per: 0, sub: '' };
 }
 
-// 箱數（可含小數）拆成整箱與零包
+// 大單位數量（可含小數）拆成整數大單位與剩下的小單位
 function splitBox(q, per) {
-  const total = Math.round(q * per);
-  return { b: Math.floor(total / per), p: total % per };
+  const small = q * per;
+  const b = Math.floor((small + 1e-6) / per);
+  return { b, p: Math.round((small - b * per) * 100) / 100 };
 }
 
-// 顯示數量：箱＋包品項顯示「2 箱 3 包」
+// 顯示數量：雙單位品項顯示「2 箱 3 包」「1 長鍋 1 小鍋」
 function qtyText(i, q) {
   if (i.per) {
     const neg = q < 0;
     const { b, p } = splitBox(Math.abs(q), i.per);
-    return `${neg ? '−' : ''}${b} 箱${p ? ` ${p} 包` : ''}`;
+    return `${neg ? '−' : ''}${b} ${i.unit}${p ? ` ${fmtQty(p)} ${i.sub}` : ''}`;
   }
   return `${q < 0 ? '−' : ''}${fmtQty(Math.abs(q))} ${i.unit}`;
 }
@@ -547,10 +550,11 @@ function renderCount() {
     let inputs;
     if (i.per) {
       const { b, p } = has ? splitBox(v, i.per) : { b: '', p: '' };
-      inputs = `<div class="inv-num"><input type="number" inputmode="numeric" min="0" step="1" value="${b}" placeholder="0" aria-label="${name} 箱數" data-box ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">箱</div></div>
-        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加一箱">+</button>
+      const big = escHtml(i.unit), small = escHtml(i.sub);
+      inputs = `<div class="inv-num"><input type="number" inputmode="numeric" min="0" step="1" value="${b}" placeholder="0" aria-label="${name} ${big}數" data-box ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">${big}</div></div>
+        <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加一${big}">+</button>
         <span class="plus-sign">＋</span>
-        <div class="inv-num pk"><input type="number" inputmode="numeric" min="0" step="1" value="${p}" placeholder="0" aria-label="${name} 零包數" data-pk ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">包</div></div>`;
+        <div class="inv-num pk"><input type="number" inputmode="decimal" min="0" step="any" value="${p}" placeholder="0" aria-label="${name} 零${small}數" data-pk ${keys} onchange="setBox('${i.id}')"><div class="inv-unit">${small}</div></div>`;
     } else {
       inputs = `<div class="inv-num"><input type="number" inputmode="decimal" min="0" step="any" value="${has ? v : ''}" placeholder="點我輸入" aria-label="${name} 數量" ${keys} onchange="setQty('${i.id}', this.value)"><div class="inv-unit">${escHtml(i.unit)}</div></div>
         <button class="plus" onclick="bump('${i.id}',1)" aria-label="增加">+</button>`;
@@ -561,7 +565,7 @@ function renderCount() {
         <div class="sp">${escHtml(i.category || '未分類')}${i.spec ? '・' + escHtml(i.spec) : ''}</div>
       </div>
       <div class="inv-step">
-        <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少${i.per ? '一箱' : ''}">−</button>
+        <button class="minus" onclick="bump('${i.id}',-1)" aria-label="減少${i.per ? '一' + escHtml(i.unit) : ''}">−</button>
         ${inputs}
       </div>
     </div>`;
@@ -579,7 +583,7 @@ window.nextOnEnter = (e) => {
   if (next) next.focus();
 };
 
-// 箱＋包品項：兩格合併成箱數（例：2 箱 3 包、每箱 7 包 → 2.428… 箱）
+// 雙單位品項：兩格合併成大單位數量（例：2 箱 3 包、每箱 7 包 → 2.428… 箱）
 window.setBox = (id) => {
   const it = _items.find(i => i.id === id);
   const row = document.getElementById('row-' + id);
@@ -654,7 +658,7 @@ window.goDiff = async () => {
   _rows = countItems().filter(i => _cur.counts[i.id] !== undefined).map(i => {
     const diff = Math.round((_cur.counts[i.id] - i.stock) * 10000) / 10000;
     return {
-      id: i.id, name: i.name, unit: i.unit, per: i.per,
+      id: i.id, name: i.name, unit: i.unit, per: i.per, sub: i.sub,
       system: i.stock, counted: _cur.counts[i.id],
       first: !i.counted, diff: Math.abs(diff) < 0.0001 ? 0 : diff
     };
@@ -710,7 +714,7 @@ window.submitCount = async () => {
   const btn = document.getElementById('dSubmitBtn');
   btn.disabled = true; btn.textContent = '送出中…';
   const t = COUNT_TYPES[_cur.type];
-  const items = _rows.map(({ per, ...r }) => ({
+  const items = _rows.map(({ per, sub, ...r }) => ({
     ...r, reason: r.first ? '首次建檔' : (r.diff !== 0 ? (_cur.reasons[r.id] || '') : '')
   }));
   const diffCount = items.filter(r => !r.first && r.diff !== 0).length;
