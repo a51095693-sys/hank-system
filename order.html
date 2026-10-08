@@ -99,7 +99,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008e";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased } from "./app.js?v=20261008f";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -151,7 +151,8 @@ window.loadOrder = async () => {
 
 // ── 輸入叫貨量（只有成品）──
 function renderInputs() {
-  const list = _items.filter(i => i.kind === '成品');
+  // 內部使用的品項店面不會叫，不列出
+  const list = _items.filter(i => i.kind === '成品' && !i.internal);
   if (!list.length) {
     document.getElementById('odList').innerHTML = '<div class="text-muted" style="font-size:14px;">還沒有「成品」品項，請到品項庫存設定種類</div>';
     return;
@@ -232,6 +233,7 @@ function plan() {
 
   const make = [], buy = [];
   order.forEach(it => {
+    if (it.internal) return;
     const need = demand[it.id] || 0;
     if (isPurchased(it)) {
       const q = Math.max(0, need + it.safety - it.stock);

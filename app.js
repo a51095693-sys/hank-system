@@ -25,7 +25,9 @@ export async function loadStockItems(db) {
         safety: Number(e.safety) || 0, sort: e.sort ?? 999, recipe,
         // 配方是一批的用量，這一批可以做出 yield 單位的本品項（舊資料沒有就是 1）
         yield: Number(e.yield) > 0 ? Number(e.yield) : 1,
-        supplier: e.supplier || ''
+        supplier: e.supplier || '',
+        // 內部使用：只出現在盤點，不出現在叫貨計算、不需要配方（例：煮雞產出的雞油）
+        internal: !!e.internal
       };
       return { ...item, ...subUnit(item) };
     })
@@ -48,7 +50,7 @@ export async function loadSuppliers(db, items = []) {
 }
 
 // 跟廠商叫貨的品項：食材，或有填廠商、沒有配方的成品（例：外購的貢丸）
-export const isPurchased = (i) => i.kind === '食材' || (!!i.supplier && !i.recipe.length);
+export const isPurchased = (i) => !i.internal && (i.kind === '食材' || (!!i.supplier && !i.recipe.length));
 
 // 配方不能繞回自己（例：A 用 B、B 又用 A）；recipe 為 id 這個品項準備存入的新配方
 export function recipeCycle(items, id, recipe) {

@@ -95,6 +95,10 @@
       </div>
       <div style="grid-column:1/-1;"><label class="form-label">廠商（外購的成品才填）</label><input type="text" class="form-control" id="iSupplier" list="supList" placeholder="央廚自己做的不用填" autocomplete="off"><datalist id="supList"></datalist>
         <div style="font-size:12px;color:var(--text2);margin-top:6px;">有填廠商、又沒有配方的成品，叫貨計算會算成要跟廠商叫貨。</div></div>
+      <label style="grid-column:1/-1;display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;background:var(--surface2);border-radius:8px;padding:10px 12px;">
+        <input type="checkbox" id="iInternal" style="margin-top:3px;cursor:pointer;">
+        <span><strong>內部使用</strong><br><span style="color:var(--text2);">只在盤點時出現，不出現在叫貨計算，也不需要設定配方（例：煮雞產出的雞油）</span></span>
+      </label>
       <div><label class="form-label">單位 *</label><input type="text" class="form-control" id="iUnit" placeholder="盤、包、鍋…"></div>
       <div><label class="form-label">規格</label><input type="text" class="form-control" id="iSpec" placeholder="例如：10份／盤"></div>
       <div><label class="form-label">安全庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="低於此數提醒"></div>
@@ -176,7 +180,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers } from "./app.js?v=20261008e";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers } from "./app.js?v=20261008f";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -274,7 +278,8 @@ function recipeText(it) {
 
 function rowHtml(it) {
   const rc = recipeText(it);
-  const sub = rc ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;white-space:normal;">配方：做 ${escHtml(qtyText(it, it.yield))} 用 ${escHtml(rc)}</div>`
+  const sub = it.internal ? '<div style="font-size:11px;color:var(--text2);margin-top:2px;">內部使用</div>'
+    : rc ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;white-space:normal;">配方：做 ${escHtml(qtyText(it, it.yield))} 用 ${escHtml(rc)}</div>`
     : it.supplier ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">外購：${escHtml(it.supplier)}</div>`
     : '<div style="font-size:11px;margin-top:2px;"><a href="recipe.html" style="color:var(--danger);">尚未設定配方 →</a></div>';
   return `<tr>
@@ -332,6 +337,7 @@ window.openItem = (id) => {
   renderKinds();
   document.getElementById('iErr').classList.add('hidden');
   document.getElementById('iSupplier').value = it ? it.supplier : '';
+  document.getElementById('iInternal').checked = it ? it.internal : false;
   loadSuppliers(db, _items).then(list => {
     document.getElementById('supList').innerHTML = list.map(sp => `<option value="${escHtml(sp.name)}"></option>`).join('');
   }).catch(() => {});
@@ -364,7 +370,7 @@ window.saveItem = async () => {
   if (dup) return;
   // 配方在「配方設定」頁編輯；改成食材時清掉配方（食材是買來的）
   const data = {
-    name, unit, kind: _kind, supplier, ...(_kind === '食材' ? { recipe: [] } : {}),
+    name, unit, kind: _kind, supplier, internal: document.getElementById('iInternal').checked, ...(_kind === '食材' ? { recipe: [] } : {}),
     spec: document.getElementById('iSpec').value.trim(),
     safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
   };
