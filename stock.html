@@ -237,10 +237,36 @@ window.renderTable = () => {
     <td data-label="安全庫存" style="color:var(--text2);">${it.safety > 0 ? fmtQty(it.safety) + ' ' + escHtml(it.unit) : '-'}</td>
     <td><button class="btn btn-sm btn-primary" onclick="openMove('${it.id}')">🔁 異動</button></td>
     <td><div class="flex gap-2">
+      <button class="btn btn-sm btn-outline" title="往上移" aria-label="往上移" onclick="moveOrder('${it.id}',-1)">↑</button>
+      <button class="btn btn-sm btn-outline" title="往下移" aria-label="往下移" onclick="moveOrder('${it.id}',1)">↓</button>
       <button class="btn btn-sm btn-outline" onclick="openItem('${it.id}')">編輯</button>
       <button class="btn btn-sm" style="background:#FEE2E2;color:var(--danger);" onclick="openDel('${it.id}')">刪除</button>
     </div></td>
   </tr>`).join('');
+};
+
+// 與同種類（成品／原物料）的上一個或下一個品項交換順序，並把該種類的 sort 重新編號
+let _ordering = false;
+window.moveOrder = async (id, dir) => {
+  if (_ordering) return;
+  const it = _items.find(x => x.id === id);
+  if (!it) return;
+  const group = _items.filter(x => x.kind === it.kind);
+  const i = group.indexOf(it);
+  const j = i + dir;
+  if (j < 0 || j >= group.length) return;
+  [group[i], group[j]] = [group[j], group[i]];
+  _ordering = true;
+  try {
+    const batch = writeBatch(db);
+    group.forEach((x, idx) => { if (x.sort !== idx) batch.update(doc(db, 'stockItems', x.id), { sort: idx }); });
+    await batch.commit();
+    await loadAll();
+  } catch (e) {
+    showToast('調整順序失敗，請重試', 'error');
+  } finally {
+    _ordering = false;
+  }
 };
 
 window.importPreset = async () => {
