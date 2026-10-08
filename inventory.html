@@ -380,7 +380,7 @@ function stockCard(title, sub) {
 // 複製成可以貼到 LINE 的文字
 let _copyHeader = '';
 function stockText(header, rows) {
-  return `【庫存】${header}\n${rows.map(r => `${r.name} ${qtyText(r.u, r.qty)}`).join('\n')}`;
+  return `【庫存】${header}\n${rows.map(r => `${r.name}：${qtyText(r.u, r.qty)}`).join('\n')}`;
 }
 async function copyText(text) {
   try {
