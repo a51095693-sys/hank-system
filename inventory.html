@@ -15,7 +15,7 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css?v=20261009b">
+<link rel="stylesheet" href="style.css?v=20261009c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -78,6 +78,19 @@ body{background:#FBF6EC}
 button.inv-li{cursor:pointer}
 button.inv-li:hover{background:#FFFBF3}
 .inv-li:first-child{border-top:none}
+.inv-dbadge{flex-shrink:0;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}
+.inv-dbadge:empty{display:none}
+.inv-dbadge.bad{background:#FDECEC;color:#C62828}
+.inv-dbadge.ok{background:#FFF0D1;color:#8A5A00}
+.det-note{font-size:12px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6}
+.det-bad td{background:#FDECEC}
+.det-why{display:block;font-size:11px;font-weight:400;color:var(--text2);margin-top:2px}
+.dd-bad{color:#C62828;font-weight:700}
+.inv-diff{background:#fff;border:1px solid #F3C4C4;border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.inv-diff h3{font-size:16px;font-weight:900;color:#C62828;margin-bottom:6px}
+.inv-diff div{font-size:14px;line-height:1.8}
+.inv-diff.ok{border-color:#F5DFA8}
+.inv-diff.ok h3{color:#8A5A00}
 .inv-li .t{font-size:16px;font-weight:700}
 .inv-li .m{font-size:13px;color:var(--mute);margin-top:2px}
 .inv-tag{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap}
@@ -240,9 +253,10 @@ button.inv-li:hover{background:#FFFBF3}
   <div class="modal" style="width:560px;">
     <div class="modal-title" id="detTitle"></div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px;" id="detMeta"></div>
+    <div id="detNote"></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>品名</th><th>盤點數量</th></tr></thead>
+        <thead id="detHead"></thead>
         <tbody id="detTable"></tbody>
       </table>
     </div>
@@ -253,9 +267,9 @@ button.inv-li:hover{background:#FFFBF3}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, query, orderBy, limit, writeBatch, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, query, where, orderBy, limit, writeBatch, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS } from "./app.js?v=20261009b";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS, loadSuppliers, expectedStock, diffAlert, addDays } from "./app.js?v=20261009c";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -399,6 +413,7 @@ async function loadHome() {
   html += _recent.length
     ? `<div class="inv-list">${_recent.map(r => `<button class="inv-li" onclick="openDetail('${r.id}')">
         <div><div class="t">${escHtml(r.date.slice(5).replace('-', '/'))} ${escHtml(r.title)}</div><div class="m">${escHtml(r.by)} · ${fmtAt(r.at)} · ${r.total} 項</div></div>
+        <span class="inv-dbadge" id="db-${r.id}"></span>
       </button>`).join('')}</div>`
     : '<div class="inv-list"><div class="inv-li" style="color:var(--mute);justify-content:center;">尚無盤點紀錄</div></div>';
 
@@ -406,6 +421,13 @@ async function loadHome() {
   const scoop = _items.filter(i => i.byproduct && i.safety > 0 && i.stock < i.safety);
   const remind = scoop.length ? `<div class="inv-remind" role="status">${scoop.map(i =>
     `<div>🔔 <strong>提醒撈取：${escHtml(i.label)}</strong> 剩 ${escHtml(qtyText(i, i.stock))}，標準 ${escHtml(qtyText(i, i.safety))}，還差 <strong>${escHtml(qtyText(i, i.safety - i.stock))}</strong>${i.byproductOf ? `（${escHtml(i.byproductOf)}）` : ''}</div>`).join('')}</div>` : '';
+  loadDiffs().then(() => _recent.forEach(r => {
+    const el = document.getElementById('db-' + r.id);
+    const df = _diffs[r.id];
+    if (!el || !df?.rows) return;
+    el.className = 'inv-dbadge ' + (df.alerts.length ? 'bad' : 'ok');
+    el.textContent = df.alerts.length ? `⚠️ ${df.alerts.length} 項差異` : '✓ 數量正常';
+  })).catch(() => {});
   body.innerHTML = `${remind}<div class="inv-home"><div>${html}</div><div>${stockCard('目前庫存', lastCountText())}</div></div>`;
 }
 
@@ -472,6 +494,47 @@ function lastCountText() {
   return r ? `最後盤點：${r.date.slice(5).replace("-", "/")} ${r.title} · ${r.by} · ${fmtAt(r.at).slice(-5)}` : "尚未盤點";
 }
 
+// ── 盤點差異：照系統算的量推「應該剩多少」，跟晚上盤點比對 ──
+let _hist = [], _orders = {}, _supCfg = {}, _diffs = {};
+async function loadDiffs() {
+  const [cs, os, sups] = await Promise.all([
+    getDocs(query(collection(db, 'stockCounts'), where('date', '>=', addDays(todayStr(), -14)))),
+    getDocs(collection(db, 'orders')),
+    loadSuppliers(db, _items)
+  ]);
+  _hist = cs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.at?.toMillis?.() ?? Infinity) - (b.at?.toMillis?.() ?? Infinity));
+  _orders = {};
+  os.docs.forEach(d => { const q = d.data().qty || {}; if (Object.keys(q).length) _orders[d.id] = q; });
+  _supCfg = {};
+  sups.forEach(sp => { _supCfg[sp.name] = sp; });
+  _diffs = {};
+  _recent.filter(r => r.slot === '晚上').forEach(r => { _diffs[r.id] = diffOf(r); });
+}
+// 某天結束時的庫存：那天（含）以前最後一次盤點的數量
+function snapAt(date) {
+  const snap = {};
+  _hist.forEach(c => { if (c.date <= date) (c.items || []).forEach(x => { snap[x.id] = x.counted; }); });
+  return snap;
+}
+// 回傳 null＝不比對；{ why }＝不能比對的原因；{ rows, alerts }＝比對結果
+function diffOf(r) {
+  if (r.slot !== '晚上') return null;
+  if (!_hist.some(c => c.date === addDays(r.date, -1))) return { why: '前一天沒有盤點，沒辦法比對' };
+  if (!_orders[r.date]) return { why: '這天沒有輸入店面叫貨量，沒辦法比對' };
+  const exp = expectedStock(_items, _supCfg, r.date, _orders, snapAt);
+  const rows = (r.items || []).map(x => {
+    const it = _items.find(i => i.id === x.id), e = exp[x.id];
+    if (!it || !e) return null;
+    const expect = Math.round(e.expect * 100) / 100;
+    return { x, it, e, expect, d: Math.round((x.counted - expect) * 100) / 100, alert: diffAlert(it, expect, x.counted) };
+  }).filter(Boolean);
+  return { rows, alerts: rows.filter(z => z.alert) };
+}
+const diffText = (it, d) => Math.abs(d) < 1e-9 ? '－' : `${d > 0 ? '多' : '少'} ${qtyText(it, Math.abs(d))}`;
+const whyText = (z) => [`前晚 ${qtyText(z.it, z.e.prev)}`, z.e.made ? `＋做 ${qtyText(z.it, z.e.made)}` : '', z.e.arrived ? `＋到貨 ${qtyText(z.it, z.e.arrived)}` : '',
+  z.e.used ? `－${z.it.kind === '成品' ? '出貨' : '用掉'} ${qtyText(z.it, Math.round(z.e.used * 100) / 100)}` : ''].filter(Boolean).join(' ');
+const DIFF_NOTE = '應該剩＝前一天晚上盤點＋照生產單做的＋照叫貨單到的貨－店面出貨和生產用掉的。差很多可能是：耗損、盤錯，或那天沒照系統的量做／叫。';
+
 let _detail = null;
 let _detEdit = false;
 window.openDetail = (id) => {
@@ -486,6 +549,12 @@ function renderDetail() {
   const r = _detail;
   document.getElementById('detTitle').textContent = `${r.date} ${r.title}${_detEdit ? '・修改數量' : ''}`;
   document.getElementById('detMeta').textContent = `${r.by}・${fmtAt(r.at)}・共 ${r.total} 項${r.editedBy ? `・${r.editedBy} 修改過` : ''}`;
+  const df = _detEdit ? null : _diffs[r.id];
+  const dmap = {};
+  (df?.rows || []).forEach(z => { dmap[z.x.id] = z; });
+  document.getElementById('detNote').innerHTML = df ? `<div class="det-note">${df.why ? '📊 ' + escHtml(df.why) : `📊 ${df.alerts.length ? `<b style="color:#C62828;">有 ${df.alerts.length} 項跟應該剩的差比較多</b>` : '<b>數量都跟應該剩的差不多</b>'}<br>${DIFF_NOTE}`}</div>` : '';
+  const withDiff = !!df?.rows;
+  document.getElementById('detHead').innerHTML = `<tr><th>品名</th><th>盤點數量</th>${withDiff ? '<th>應該剩</th><th>差異</th>' : ''}</tr>`;
   document.getElementById('detTable').innerHTML = (r.items || []).map((x, k) => {
     const u = _items.find(i => i.id === x.id) || x;
     let cell = escHtml(qtyText(u, x.counted));
@@ -498,9 +567,11 @@ function renderDetail() {
         cell = `<div class="det-edit" data-k="${k}">${inp(x.counted, 'data-one', u.unit || x.unit || '')}</div>`;
       }
     }
-    return `<tr>
-    <td data-label="品名" style="font-weight:700;">${escHtml(x.name)}</td>
+    const z = dmap[x.id];
+    return `<tr class="${z?.alert ? 'det-bad' : ''}">
+    <td data-label="品名" style="font-weight:700;">${escHtml(x.name)}${z?.alert ? `<span class="det-why">${escHtml(whyText(z))}</span>` : ''}</td>
     <td data-label="盤點數量">${cell}</td>
+    ${withDiff ? `<td data-label="應該剩">${z ? escHtml(qtyText(z.it, z.expect)) : '－'}</td><td data-label="差異" class="${z?.alert ? 'dd-bad' : ''}">${z ? escHtml(diffText(z.it, z.d)) : '－'}</td>` : ''}
   </tr>`;
   }).join('');
   // 只有最近一次盤點可以修改：之後若又盤點過，庫存已被新的盤點覆蓋
@@ -745,6 +816,7 @@ window.saveCount = async () => {
     clearDraft();
     renderDone(items.length);
     show('vDone');
+    if (_cur.slot === '晚上') showDoneDiff(countRef.id);
   } catch (e) {
     showToast('儲存失敗，請檢查網路後重試', 'error');
   } finally {
@@ -753,6 +825,21 @@ window.saveCount = async () => {
 };
 
 // ── 4. 完成 ──
+async function showDoneDiff(id) {
+  try {
+    const snap = await getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(10)));
+    _recent = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    await loadDiffs();
+    const df = _diffs[id];
+    if (!df?.rows) return;
+    const box = df.alerts.length
+      ? `<div class="inv-diff"><h3>⚠️ 有 ${df.alerts.length} 項跟應該剩的差比較多</h3>${df.alerts.map(z =>
+          `<div><b>${escHtml(z.it.label)}</b>：盤到 ${escHtml(qtyText(z.it, z.x.counted))}，應該剩 ${escHtml(qtyText(z.it, z.expect))}（<span class="dd-bad">${escHtml(diffText(z.it, z.d))}</span>）<span class="det-why">${escHtml(whyText(z))}</span></div>`).join('')}
+          <div class="det-why" style="margin-top:6px;">先確認有沒有盤錯；盤錯可以在首頁「最近盤點」點進去修改數量。${escHtml(DIFF_NOTE)}</div></div>`
+      : '<div class="inv-diff ok"><h3>✓ 數量都跟應該剩的差不多</h3><div class="det-why">照生產單、叫貨單和店面出貨推算，沒有明顯短少。</div></div>';
+    document.getElementById('doneList').insertAdjacentHTML('afterbegin', box);
+  } catch (e) {}
+}
 function renderDone(n) {
   const now = new Date();
   const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;

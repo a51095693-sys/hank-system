@@ -86,6 +86,157 @@ export const offText = (off) => off?.length ? `週${[...off].sort().map(d => WEE
 // 跟廠商叫貨的品項：食材，或有填廠商、沒有配方的成品（例：外購的貢丸）
 export const isPurchased = (i) => !i.internal && (i.kind === '食材' || (!!i.supplier && !i.recipe.length));
 
+// ── 叫貨與生產的推算（叫貨計算、盤點差異共用）──
+const ymdStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return ymdStr(d); };
+export const dow = (s) => new Date(s + 'T00:00:00').getDay();
+export const supOf = (it) => it.supplier || '未設定廠商';
+// 叫貨數量無條件進位到整數（雙單位品項進位到整數小單位）
+export const roundUpQty = (it, q) => it.per ? Math.ceil(q * it.per - 1e-9) / it.per : Math.ceil(q - 1e-9);
+
+// 從成品往下展開配方：每一層都補足到安全庫存，扣掉現有庫存，不夠的才往下推算材料。
+// stockOf：品項 → 當時庫存（預設用目前庫存）
+// 回傳 make（要做）、buy（要叫）、demand（每個品項這次會用掉／出掉多少）
+export function planNeeds(items, qty, stockOf = (it) => it.stock) {
+  const byId = (id) => items.find(i => i.id === id);
+  const demand = {};
+  Object.entries(qty || {}).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
+
+  // 依配方排順序：用到某材料的品項一定比該材料先算
+  const order = [];
+  const seen = new Set();
+  const visit = (it) => {
+    if (seen.has(it.id)) return;
+    seen.add(it.id);
+    it.recipe.forEach(r => { const c = byId(r.id); if (c) visit(c); });
+    order.push(it);
+  };
+  items.forEach(visit);
+  order.reverse();
+
+  const make = [], buy = [];
+  order.forEach(it => {
+    if (it.internal) return;
+    const need = demand[it.id] || 0;
+    const stock = stockOf(it);
+    if (isPurchased(it)) {
+      const q = Math.max(0, need + it.safety - stock);
+      if (q > 1e-9) buy.push({ it, need, q, stock });
+      return;
+    }
+    // 自己做的成品也要做到補足安全庫存，數量無條件進位
+    const raw = need + it.safety - stock;
+    if (raw <= 1e-9) return;
+    // 整批生產的品項，做的量進位到整批（例：辣椒一批 3 小鍋，要 1 小鍋也做 3 小鍋）
+    const q = it.wholeBatch && it.recipe.length ? Math.ceil(raw / it.yield - 1e-9) * it.yield : roundUpQty(it, raw);
+    make.push({ it, need, q, stock, noRecipe: !it.recipe.length && !it.byproduct });
+    it.recipe.forEach(r => { if (r.id) demand[r.id] = (demand[r.id] || 0) + q * r.qty / it.yield; });
+  });
+  return { make, buy, demand };
+}
+
+// 某天的店面叫貨量：有輸入就用；沒輸入就用最近一天有輸入的量估
+// days：{日期: {成品id: 數量}}
+function qtyOn(days, d) {
+  if (days[d]) return { q: days[d], est: false };
+  const known = Object.keys(days).sort();
+  const near = known.filter(k => k <= d).pop() || known[0];
+  return near ? { q: days[near], est: true } : null;
+}
+function sumQty(days, dates) {
+  const all = {};
+  let est = false, none = false;
+  dates.forEach(d => {
+    const r = qtyOn(days, d);
+    if (!r) { none = true; return; }
+    est = est || r.est;
+    Object.entries(r.q).forEach(([id, q]) => { all[id] = (all[id] || 0) + q; });
+  });
+  return { all, est, none };
+}
+
+// 某天要跟各廠商叫的貨：依「幾天後到貨」「下次到貨日」各自計算
+//   到貨前這幾天的出貨要先扣掉；但到貨前如果這家有送貨，那是之前叫的貨，當作已經照系統叫過
+// supCfg：{廠商名稱: { off, rules, lead, note }}
+export function supplierPlan(items, supCfg, day, days, stockOf = (it) => it.stock) {
+  const byId = (id) => items.find(i => i.id === id);
+  const cfgOf = (sup) => supCfg[sup] || { off: [], rules: {}, lead: 1, note: '' };
+  const offOn = (sup, d) => (cfgOf(sup).off || []).includes(dow(d));
+  const sups = [...new Set(items.filter(isPurchased).map(supOf))];
+  const cache = {};
+  return sups.map(sup => {
+    const cfg = cfgOf(sup);
+    const lead = cfg.lead || 1;
+    const arrive = addDays(day, lead);
+    if (offOn(sup, arrive)) {
+      // 這天叫的話到貨那天不送：找下一個可以叫的日子
+      let k = 1;
+      while (k < 8 && offOn(sup, addDays(day, k + lead))) k++;
+      return { sup, cfg, skip: true, nextOrder: addDays(day, k), nextArrive: addDays(day, k + lead) };
+    }
+    let n = 1;
+    while (n < 7 && offOn(sup, addDays(arrive, n))) n++;
+    // 到貨前要靠現有庫存撐的日子：從隔天到「之前叫的貨送到」的前一天
+    const pre = [];
+    for (let i = 1; i < lead; i++) { const d = addDays(day, i); if (!offOn(sup, d)) break; pre.push(d); }
+    const cover = Array.from({ length: n }, (_, i) => addDays(arrive, i));
+    const key = pre.length + '|' + lead + '|' + n;
+    if (!cache[key]) {
+      const sq = sumQty(days, [...pre, ...cover]);
+      cache[key] = { ...sq, buy: sq.none && !Object.keys(sq.all).length ? [] : planNeeds(items, sq.all, stockOf).buy };
+    }
+    const c = cache[key];
+    const rows = c.buy.filter(b => supOf(b.it) === sup).map(b => ({ ...b }));
+    // 叫貨規則：最低叫貨量、不能單獨叫
+    rows.forEach(b => {
+      const r = cfg.rules?.[b.it.id] || {};
+      b.order = Math.max(roundUpQty(b.it, b.q), r.min || 0);
+      b.minUp = r.min > 0 && b.order > roundUpQty(b.it, b.q);
+    });
+    rows.forEach(b => {
+      const r = cfg.rules?.[b.it.id] || {};
+      const w = r.with && byId(r.with);
+      if (w && !rows.some(x => x.it.id === w.id)) {
+        const wr = cfg.rules?.[w.id] || {};
+        b.alone = `不能單獨叫，要搭配${w.name}；這次不用叫${w.name}，可以下次再一起叫，或一起叫${w.name}${wr.min > 0 ? ` ${qtyText(w, wr.min)}` : ''}`;
+      }
+    });
+    return { sup, cfg, lead, arrive, n, pre, cover, rows, est: c.est, none: c.none && !Object.keys(c.all).length };
+  }).sort((a, b) => (a.skip ? 1 : 0) - (b.skip ? 1 : 0) || (a.rows?.length ? 0 : 1) - (b.rows?.length ? 0 : 1) || a.sup.localeCompare(b.sup, 'zh-Hant'));
+}
+
+// 盤點差異：照系統算的量推「這天晚上應該剩多少」
+//   應該剩 ＝ 前一天晚上盤點 ＋ 照生產單做的 ＋ 照叫貨單今天到的 － 店面出貨 － 生產用掉的
+// snapAt(日期)：{品項id: 那天最後一次盤點的數量}；days：{店面到貨日: {成品id: 數量}}
+// 回傳 {品項id: { expect, made, arrived, used }}；內部使用、前一天沒盤點的品項不算
+export function expectedStock(items, supCfg, day, days, snapAt) {
+  const prev = snapAt(addDays(day, -1));
+  const stockFrom = (snap) => (it) => snap[it.id] ?? 0;
+  const { make, demand } = planNeeds(items, days[day] || {}, stockFrom(prev));
+  const made = {}, arrived = {};
+  make.forEach(m => { made[m.it.id] = (made[m.it.id] || 0) + m.q; });
+  // 今天到的貨：每家廠商在「今天 − 提前天數」那天照系統叫的量
+  const leads = [...new Set(items.filter(isPurchased).map(i => (supCfg[supOf(i)]?.lead) || 1))];
+  leads.forEach(lead => {
+    const od = addDays(day, -lead);
+    supplierPlan(items, supCfg, od, days, stockFrom(snapAt(od)))
+      .filter(t => !t.skip && t.lead === lead && t.arrive === day)
+      .forEach(t => t.rows.forEach(b => { arrived[b.it.id] = (arrived[b.it.id] || 0) + b.order; }));
+  });
+  const out = {};
+  items.forEach(it => {
+    if (it.internal || prev[it.id] === undefined) return;
+    const m = made[it.id] || 0, a = arrived[it.id] || 0, u = demand[it.id] || 0;
+    out[it.id] = { prev: prev[it.id], made: m, arrived: a, used: u, expect: Math.max(0, prev[it.id] + m + a - u) };
+  });
+  return out;
+}
+// 差異要不要提醒：超過 1 個最小單位，而且超過應有量的 5%
+export const diffAlert = (it, expect, counted) => {
+  const d = Math.abs(counted - expect);
+  return d >= (it.per ? 1 / it.per : 1) - 1e-9 && d > expect * 0.05;
+};
+
 // 配方不能繞回自己（例：A 用 B、B 又用 A）；recipe 為 id 這個品項準備存入的新配方
 export function recipeCycle(items, id, recipe) {
   const byId = (x) => items.find(i => i.id === x);

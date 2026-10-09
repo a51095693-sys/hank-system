@@ -15,7 +15,7 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css?v=20261009b">
+<link rel="stylesheet" href="style.css?v=20261009c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -118,7 +118,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, isPurchased, recipeAmtText, recipeQty, fmtQty, loadSuppliers, WEEKDAYS } from "./app.js?v=20261009b";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, recipeAmtText, recipeQty, fmtQty, planNeeds, supplierPlan, loadSuppliers, WEEKDAYS } from "./app.js?v=20261009c";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -256,45 +256,8 @@ window.saveOrder = async () => {
   }
 };
 
-// ── 計算 ──
-// 從成品往下展開配方：每一層都補足到安全庫存，扣掉現有庫存，不夠的才往下推算材料。
-function plan(qty = _qty) {
-  const demand = {};
-  Object.entries(qty).forEach(([id, q]) => { if (byId(id)) demand[id] = q; });
-
-  // 依配方排順序：用到某材料的品項一定比該材料先算
-  const order = [];
-  const seen = new Set();
-  const visit = (it) => {
-    if (seen.has(it.id)) return;
-    seen.add(it.id);
-    it.recipe.forEach(r => { const c = byId(r.id); if (c) visit(c); });
-    order.push(it);
-  };
-  _items.forEach(visit);
-  order.reverse();
-
-  const make = [], buy = [];
-  order.forEach(it => {
-    if (it.internal) return;
-    const need = demand[it.id] || 0;
-    if (isPurchased(it)) {
-      const q = Math.max(0, need + it.safety - it.stock);
-      if (q > 1e-9) buy.push({ it, need, q, stock: it.stock });
-      return;
-    }
-    // 自己做的成品也要做到補足安全庫存，數量無條件進位
-    const raw = need + it.safety - it.stock;
-    if (raw <= 1e-9) return;
-    // 整批生產的品項，做的量進位到整批（例：辣椒一批 3 小鍋，要 1 小鍋也做 3 小鍋）
-    const q = it.wholeBatch && it.recipe.length ? Math.ceil(raw / it.yield - 1e-9) * it.yield : roundUp(it, raw);
-    make.push({ it, need, q, noRecipe: !it.recipe.length && !it.byproduct });
-    it.recipe.forEach(r => { if (r.id) demand[r.id] = (demand[r.id] || 0) + q * r.qty / it.yield; });
-  });
-  return { make, buy };
-}
-
-// 叫貨數量無條件進位到整數（雙單位品項進位到整數小單位）
+// ── 計算（推算邏輯在 app.js，盤點差異也用同一套）──
+const plan = (qty = _qty) => planNeeds(_items, qty);
 // 做這次的量要用的材料，例：「生鮮雞肉 38.125 件」
 // 用台斤／兩寫的材料換成實際拿的單位：果糖幾桶、油膏幾桶、水幾 CC，後面附上台斤
 function usesText(m) {
@@ -316,81 +279,11 @@ function usesText(m) {
   }).filter(Boolean).join('、');
 }
 
-function roundUp(it, q) {
-  return it.per ? Math.ceil(q * it.per - 1e-9) / it.per : Math.ceil(q - 1e-9);
-}
-
 let _plan = { make: [], buy: [] };
 let _today = [];
-const supOf = (it) => it.supplier || '未設定廠商';
-const cfgOf = (sup) => _supCfg[sup] || { off: [], rules: {}, lead: 1, note: '' };
-const offOn = (sup, d) => (cfgOf(sup).off || []).includes(dow(d));
 const wk = (d) => `${md(d)}（週${WEEKDAYS[dow(d)]}）`;
 
-// 某天的店面叫貨量：有輸入就用；沒輸入就用最近一天有輸入的量估
-function qtyOn(d) {
-  if (_days[d]) return { q: _days[d], est: false };
-  const known = Object.keys(_days).sort();
-  const near = known.filter(k => k <= d).pop() || known[0];
-  return near ? { q: _days[near], est: true } : null;
-}
-const sumQty = (dates) => {
-  const all = {};
-  let est = false, none = false;
-  dates.forEach(d => {
-    const r = qtyOn(d);
-    if (!r) { none = true; return; }
-    est = est || r.est;
-    Object.entries(r.q).forEach(([id, q]) => { all[id] = (all[id] || 0) + q; });
-  });
-  return { all, est, none };
-};
-
-// 今天要叫的貨：每家廠商依「幾天後到貨」「下次到貨日」各自計算
-//   到貨前這幾天的出貨要先扣掉；但到貨前如果這家有送貨，那是之前叫的貨，當作已經照系統叫過
-function todayPlan() {
-  const sups = [...new Set(_items.filter(isPurchased).map(supOf))];
-  const cache = {};
-  return sups.map(sup => {
-    const cfg = cfgOf(sup);
-    const lead = cfg.lead || 1;
-    const arrive = addDays(TODAY, lead);
-    if (offOn(sup, arrive)) {
-      // 今天叫的話到貨那天不送：找下一個可以叫的日子
-      let k = 1;
-      while (k < 8 && offOn(sup, addDays(TODAY, k + lead))) k++;
-      return { sup, cfg, skip: true, nextOrder: addDays(TODAY, k), nextArrive: addDays(TODAY, k + lead) };
-    }
-    let n = 1;
-    while (n < 7 && offOn(sup, addDays(arrive, n))) n++;
-    // 到貨前要靠現有庫存撐的日子：從明天到「之前叫的貨送到」的前一天
-    const pre = [];
-    for (let i = 1; i < lead; i++) { const d = addDays(TODAY, i); if (!offOn(sup, d)) break; pre.push(d); }
-    const cover = Array.from({ length: n }, (_, i) => addDays(arrive, i));
-    const key = pre.length + '|' + lead + '|' + n;
-    if (!cache[key]) {
-      const sq = sumQty([...pre, ...cover]);
-      cache[key] = { ...sq, buy: sq.none && !Object.keys(sq.all).length ? [] : plan(sq.all).buy };
-    }
-    const c = cache[key];
-    const rows = c.buy.filter(b => supOf(b.it) === sup).map(b => ({ ...b }));
-    // 叫貨規則：最低叫貨量、不能單獨叫
-    rows.forEach(b => {
-      const r = cfg.rules?.[b.it.id] || {};
-      b.order = Math.max(roundUp(b.it, b.q), r.min || 0);
-      b.minUp = r.min > 0 && b.order > roundUp(b.it, b.q);
-    });
-    rows.forEach(b => {
-      const r = cfg.rules?.[b.it.id] || {};
-      const w = r.with && byId(r.with);
-      if (w && !rows.some(x => x.it.id === w.id)) {
-        const wr = cfg.rules?.[w.id] || {};
-        b.alone = `不能單獨叫，要搭配${w.name}；這次不用叫${w.name}，可以下次再一起叫，或一起叫${w.name}${wr.min > 0 ? ` ${qtyText(w, wr.min)}` : ''}`;
-      }
-    });
-    return { sup, cfg, lead, arrive, n, pre, cover, rows, est: c.est, none: c.none && !Object.keys(c.all).length };
-  }).sort((a, b) => (a.skip ? 1 : 0) - (b.skip ? 1 : 0) || (a.rows?.length ? 0 : 1) - (b.rows?.length ? 0 : 1) || a.sup.localeCompare(b.sup, 'zh-Hant'));
-}
+const todayPlan = () => supplierPlan(_items, _supCfg, TODAY, _days);
 
 function supCard(t, k) {
   const head = `<div class="od-sup">${escHtml(t.sup)}</div>`;
