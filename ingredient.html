@@ -15,7 +15,7 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
-<link rel="stylesheet" href="style.css?v=20261009c">
+<link rel="stylesheet" href="style.css?v=20261009d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -119,6 +119,10 @@
           <span style="font-size:14px;">台斤</span></div></div>
       <div><label class="form-label">預留量</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iSafety" placeholder="至少要留多少"></div>
       <div id="iStockWrap"><label class="form-label">目前庫存</label><input type="number" min="0" step="any" inputmode="decimal" class="form-control" id="iStock" placeholder="0"></div>
+      <label style="grid-column:1/-1;display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;background:var(--surface2);border-radius:8px;padding:10px 12px;">
+        <input type="checkbox" id="iCountAs" style="margin-top:3px;cursor:pointer;">
+        <span><strong>盤點時歸在成品</strong><br><span style="color:var(--text2);">跟成品一起中午、晚上盤，不放在一天一次的食材盤點（例：生鮮雞肉）</span></span>
+      </label>
     </div>
     <div id="iErr" class="hidden" role="alert" style="font-size:13px;color:var(--danger);background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:8px 10px;margin:-6px 0 12px;"></div>
     <div class="flex gap-2">
@@ -197,7 +201,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261009c";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261009d";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -427,6 +431,7 @@ window.openItem = (id, supIdx) => {
   document.getElementById('iCatty').value = it && it.catty > 0 ? it.catty : '';
   document.getElementById('iCattyUnit').textContent = it ? it.unit : '單位';
   document.getElementById('iSafety').value = it && it.safety > 0 ? it.safety : '';
+  document.getElementById('iCountAs').checked = !!it?.countAs;
   document.getElementById('iStock').value = '';
   // 已建立的食材庫存由盤點或「進貨」更新，保留紀錄
   document.getElementById('iStockWrap').classList.toggle('hidden', !!it);
@@ -456,7 +461,8 @@ window.saveItem = async () => {
     supplier,
     catty: Math.max(0, parseFloat(document.getElementById('iCatty').value) || 0),
     spec: document.getElementById('iSpec').value.trim(),
-    safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
+    safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0),
+    countAs: document.getElementById('iCountAs').checked ? '成品' : ''
   };
   const btn = document.getElementById('itemSaveBtn');
   btn.disabled = true; btn.textContent = '儲存中…';

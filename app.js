@@ -50,6 +50,8 @@ export async function loadStockItems(db) {
         // 副產品：煮其他東西時順便產出（例：煮雞撈的雞湯），不需配方；byproductOf 記錄來源，如「煮雞」
         byproduct: !!e.byproduct,
         byproductOf: e.byproductOf || '',
+        // 盤點時歸在成品：食材也跟成品一起中午、晚上盤（例：生鮮雞肉）
+        countAs: e.countAs === '成品' && kind === '食材' ? '成品' : '',
         // 台斤換算：1 單位（桶、箱…）等於幾台斤；0 表示未設定
         catty: Number(e.catty) > 0 ? Number(e.catty) : 0
       };
