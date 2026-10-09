@@ -1,8 +1,6 @@
 import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福','新莊'];
-
 // ── 央廚：品項、配方、廠商名單三間共用；庫存、安全庫存、盤點、叫貨、廠商送貨設定各自一份 ──
 export const KITCHENS = [{ id: 'ha', name: '華安央廚' }, { id: 'xj', name: '鑫雞肉央廚' }, { id: 'xz', name: '新莊央廚' }];
 // 分成三間以前的資料都是華安的：華安沒有自己的欄位時沿用舊欄位

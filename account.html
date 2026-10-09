@@ -42,8 +42,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>帳號</th><th>姓名</th><th>職稱</th><th>所屬門市</th><th>所屬央廚</th><th>建立時間</th><th></th><th></th></tr></thead>
-          <tbody id="acTable"><tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
+          <thead><tr><th>帳號</th><th>姓名</th><th>職稱</th><th>所屬央廚</th><th>建立時間</th><th></th><th></th></tr></thead>
+          <tbody id="acTable"><tr><td colspan="7" class="text-muted text-center" style="padding:24px;">載入中…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -82,25 +82,6 @@
         <option value="副店長">副店長</option>
         <option value="廠長">廠長</option>
         <option value="副廠長">副廠長</option>
-      </select>
-    </div>
-    <div style="margin-bottom:16px;">
-      <label class="form-label">所屬門市</label>
-      <select class="form-control" id="aStore">
-        <option value="總公司">總公司</option>
-        <option value="鑫耀鑫">鑫耀鑫</option>
-        <option value="鑫營">鑫營</option>
-        <option value="新生北">新生北</option>
-        <option value="景新">景新</option>
-        <option value="梁鑫">梁鑫</option>
-        <option value="泉州">泉州</option>
-        <option value="府中">府中</option>
-        <option value="心惦">心惦</option>
-        <option value="巷日">巷日</option>
-        <option value="大直">大直</option>
-        <option value="福城">福城</option>
-        <option value="幸福">幸福</option>
-        <option value="新莊">新莊</option>
       </select>
     </div>
     <div style="margin-bottom:16px;">
@@ -146,25 +127,6 @@
       </select>
     </div>
     <div style="margin-bottom:16px;">
-      <label class="form-label">所屬門市</label>
-      <select class="form-control" id="eStore">
-        <option value="總公司">總公司</option>
-        <option value="鑫耀鑫">鑫耀鑫</option>
-        <option value="鑫營">鑫營</option>
-        <option value="新生北">新生北</option>
-        <option value="景新">景新</option>
-        <option value="梁鑫">梁鑫</option>
-        <option value="泉州">泉州</option>
-        <option value="府中">府中</option>
-        <option value="心惦">心惦</option>
-        <option value="巷日">巷日</option>
-        <option value="大直">大直</option>
-        <option value="福城">福城</option>
-        <option value="幸福">幸福</option>
-        <option value="新莊">新莊</option>
-      </select>
-    </div>
-    <div style="margin-bottom:16px;">
       <label class="form-label">所屬央廚</label>
       <select class="form-control" id="eKitchen">
         <option value="ha">華安央廚</option>
@@ -198,7 +160,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signOut as fbSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, setDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, kitchenName } from "./app.js?v=20261009k";
+import { getUserData, showToast, renderSidebar, kitchenName } from "./app.js?v=20261009m";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -230,7 +192,7 @@ async function loadAccounts() {
   try {
     const snap = await getDocs(collection(db, 'accounts'));
     if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">尚無帳號記錄<br><span style="font-size:11px;">點擊「新增帳號」建立員工帳號</span></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:24px;">尚無帳號記錄<br><span style="font-size:11px;">點擊「新增帳號」建立員工帳號</span></td></tr>';
       return;
     }
     const sorted = snap.docs.slice().sort((a, b) =>
@@ -248,7 +210,6 @@ async function loadAccounts() {
         <td data-label="帳號"><code style="background:var(--surface2);padding:2px 8px;border-radius:6px;font-size:12px;">${e.idNo}</code></td>
         <td data-label="姓名"><strong>${e.name}</strong></td>
         <td data-label="職稱">${roleLabel}</td>
-        <td data-label="所屬門市">${e.store || '-'}</td>
         <td data-label="所屬央廚">${e.role === 'admin' ? '三間都可以看' : kitchenName(e.kitchen || 'ha')}</td>
         <td data-label="建立時間" style="font-size:12px;color:var(--text3);">${createdAt}</td>
         <td><button class="btn btn-sm btn-outline" onclick="openEdit('${d.id}')">編輯</button></td>
@@ -256,14 +217,13 @@ async function loadAccounts() {
       </tr>`;
     }).join('');
   } catch(err) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:24px;">載入失敗</td></tr>';
   }
 }
 
 window.openAdd = () => {
   ['aIdNo','aName','aPwd'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('aRole').selectedIndex = 0;
-  document.getElementById('aStore').selectedIndex = 0;
   document.getElementById('aKitchen').selectedIndex = 0;
   document.getElementById('emailPreview').textContent = '帳號@complaint.local';
   document.getElementById('addModal').classList.add('open');
@@ -280,7 +240,6 @@ window.createAccount = async () => {
   const name = document.getElementById('aName').value.trim();
   const pwd = document.getElementById('aPwd').value;
   const role = document.getElementById('aRole').value;
-  const store = document.getElementById('aStore').value;
   const kitchen = document.getElementById('aKitchen').value;
   if (!idNo || !name || !pwd) { showToast('請填寫所有欄位', 'error'); return; }
   if (!/^\d{6}$/.test(pwd)) { showToast('密碼須為生日6位數字', 'error'); return; }
@@ -291,7 +250,7 @@ window.createAccount = async () => {
     const cred = await createUserWithEmailAndPassword(secondAuth, email, pwd);
     await fbSignOut(secondAuth);
     await setDoc(doc(db, 'accounts', cred.user.uid), {
-      uid: cred.user.uid, idNo, name, role, store, kitchen, email,
+      uid: cred.user.uid, idNo, name, role, kitchen, email,
       createdAt: serverTimestamp()
     });
     showToast(`帳號 ${idNo} 建立成功`, 'success');
@@ -315,7 +274,6 @@ window.openEdit = (id) => {
   document.getElementById('eIdNo').value = e.idNo;
   document.getElementById('eName').value = e.name;
   document.getElementById('eRole').value = e.role;
-  document.getElementById('eStore').value = e.store || '鑫耀鑫';
   document.getElementById('eKitchen').value = e.kitchen || 'ha';
   document.getElementById('editModal').classList.add('open');
 };
@@ -325,13 +283,12 @@ window.saveEdit = async () => {
   const id = document.getElementById('eId').value;
   const name = document.getElementById('eName').value.trim();
   const role = document.getElementById('eRole').value;
-  const store = document.getElementById('eStore').value;
   const kitchen = document.getElementById('eKitchen').value;
   if (!name) { showToast('請輸入姓名', 'error'); return; }
   const btn = document.getElementById('editBtn');
   btn.disabled = true; btn.textContent = '儲存中…';
   try {
-    await updateDoc(doc(db, 'accounts', id), { name, role, store, kitchen });
+    await updateDoc(doc(db, 'accounts', id), { name, role, kitchen });
     if (id === auth.currentUser.uid) sessionStorage.removeItem('ud_' + id);
     showToast('帳號已更新', 'success');
     closeEdit();
