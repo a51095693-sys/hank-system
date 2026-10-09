@@ -53,7 +53,8 @@ body{background:#FBF6EC}
 .inv-stabs button.on .n{background:#FFF0D1;color:#C24A16}
 .inv-plan tr.grp td{color:#F5C04A;font-weight:800;font-size:13px;padding-top:12px}
 .inv-remind{background:#FFF7E0;border:1px solid #F5C04A;border-radius:14px;padding:12px 16px;margin-bottom:16px;font-size:15px;line-height:1.7;color:#2B1D14}
-.inv-slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.inv-slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:480px){.inv-slots{gap:6px}.inv-slot{padding:10px 8px}.inv-slot .nm{font-size:15px;white-space:nowrap}.inv-slot .st{font-size:12px}}
 .inv-slot{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);color:#fff;font-family:inherit;text-align:left;cursor:pointer}
 .inv-slot:hover{background:rgba(255,255,255,.08)}
 .inv-slot.now{border-color:#F7B500;box-shadow:inset 0 0 0 1px #F7B500}
@@ -293,9 +294,10 @@ const IC = {
 const CHECK_MARK = svg(IC.check, 18, 3, '#C24A16');
 
 const COUNT_TYPES = {
-  // 每日盤點包含成品與食材，叫貨計算才有完整庫存（key 沿用「成品」以相容舊紀錄）
-  '成品': { title: '每日盤點', ic: IC.box, kinds: KINDS, partial: false },
-  '抽盤': { title: '臨時抽盤', ic: IC.search, kinds: KINDS, partial: true }
+  // 成品中午、晚上各盤一次；食材每天盤一次（舊紀錄的「成品」盤點包含食材）
+  '成品': { title: '成品盤點', ic: IC.box, kinds: ['成品'], partial: false },
+  '食材': { title: '食材盤點', ic: IC.box, kinds: ['食材'], partial: false },
+  '抽盤': { title: '臨時抽盤', ic: IC.search, kinds: KINDS, partial: true, extra: true }
 };
 // 成品每天盤兩次；15:00 前算中午，之後算晚上
 const SLOTS = ['中午', '晚上'];
@@ -375,6 +377,12 @@ async function loadHome() {
   const draft = readDraft();
   const nFinished = _items.length;
   const doneOf = (s) => _recent.find(r => r.date === today && r.type === '成品' && r.slot === s);
+  // 今天的三個任務：中午成品、晚上成品、食材（每天一次）
+  const nOf = (k) => _items.filter(i => i.kind === k).length;
+  const TASKS = [
+    ...SLOTS.map(s => ({ name: `${s}盤點`, sub: `成品 ${nOf('成品')} 項`, go: `startCount('成品','${s}')`, done: doneOf(s), slot: s })),
+    { name: '食材盤點', sub: `食材 ${nOf('食材')} 項`, go: `startCount('食材')`, done: _recent.find(r => r.date === today && r.type === '食材'), slot: '' }
+  ].filter(t => t.slot || nOf('食材'));
 
   let html = '';
   const n = Object.keys(draft?.counts || {}).length;
@@ -387,25 +395,23 @@ async function loadHome() {
       <button class="inv-link" onclick="discardDraft()">放棄這次暫存</button>
     </div>`;
   } else {
-    // 主按鈕：優先盤現在這個時段；已完成就改盤另一個未完成的時段
+    // 主按鈕：優先盤現在這個時段的成品，再來是食材，最後是另一個時段
     const now = slotNow();
-    const target = !doneOf(now) ? now : (SLOTS.find(s => !doneOf(s)) || now);
-    const allDone = SLOTS.every(doneOf);
+    const order = [TASKS.find(t => t.slot === now), TASKS.find(t => !t.slot), ...TASKS.filter(t => t.slot && t.slot !== now)].filter(Boolean);
+    const allDone = TASKS.every(t => t.done);
+    const target = order.find(t => !t.done) || TASKS.find(t => t.slot === now);
     html += `<div class="inv-hero">
-      <div class="hrow"><span class="lab">今日任務 · ${nFinished} 個品項</span><span class="inv-pill ${allDone ? 'ok' : 'todo'}">${SLOTS.filter(doneOf).length} / 2 完成</span></div>
-      <div class="inv-slots">${SLOTS.map(s => {
-        const d = doneOf(s);
-        return `<button class="inv-slot${d ? ' done' : ''}${s === target && !allDone ? ' now' : ''}" onclick="startCount('成品','${s}')" ${nFinished ? '' : 'disabled'}>
-          <span class="nm">${d ? svg(IC.check, 18, 3, '#F7B500') : ''}${s}盤點</span>
-          <span class="st">${d ? `${escHtml(d.by)} · ${fmtAt(d.at).slice(-5)} 完成` : '未完成'}</span>
-        </button>`;
-      }).join('')}</div>
-      <button class="inv-big go" onclick="startCount('成品','${target}')" ${nFinished ? '' : 'disabled'}>${allDone ? `再盤一次（${target}）` : `開始${target}盤點`} ${svg(IC.arrow, 22, 2.5)}</button>
+      <div class="hrow"><span class="lab">今日任務</span><span class="inv-pill ${allDone ? 'ok' : 'todo'}">${TASKS.filter(t => t.done).length} / ${TASKS.length} 完成</span></div>
+      <div class="inv-slots" style="grid-template-columns:repeat(${TASKS.length},minmax(0,1fr));">${TASKS.map(t => `<button class="inv-slot${t.done ? ' done' : ''}${t === target && !allDone ? ' now' : ''}" onclick="${t.go}" ${nFinished ? '' : 'disabled'}>
+          <span class="nm">${t.done ? svg(IC.check, 18, 3, '#F7B500') : ''}${t.name}</span>
+          <span class="st">${t.done ? `${escHtml(t.done.by)} · ${fmtAt(t.done.at).slice(-5)} 完成` : escHtml(t.sub)}</span>
+        </button>`).join('')}</div>
+      <button class="inv-big go" onclick="${target.go}" ${nFinished ? '' : 'disabled'}>${allDone ? `再盤一次（${target.name}）` : `開始${target.name}`} ${svg(IC.arrow, 22, 2.5)}</button>
     </div>`;
   }
 
   // 沒有品項的盤點類型不顯示（例如尚未建立原物料）
-  const types = Object.entries(COUNT_TYPES).filter(([, t]) => _items.some(i => t.kinds.includes(i.kind)));
+  const types = Object.entries(COUNT_TYPES).filter(([, t]) => t.extra && _items.some(i => t.kinds.includes(i.kind)));
   html += `<div class="inv-types" style="grid-template-columns:repeat(${types.length},minmax(0,1fr));">${types.map(([k, t]) =>
     `<button class="inv-type" onclick="startCount('${k}')">${svg(t.ic, 24, 2, '#C24A16')}${t.title}</button>`).join('')}</div>`;
 
@@ -508,7 +514,7 @@ async function loadDiffs() {
   _supCfg = {};
   sups.forEach(sp => { _supCfg[sp.name] = sp; });
   _diffs = {};
-  _recent.filter(r => r.slot === '晚上').forEach(r => { _diffs[r.id] = diffOf(r); });
+  _recent.forEach(r => { _diffs[r.id] = diffOf(r); });
 }
 // 某天結束時的庫存：那天（含）以前最後一次盤點的數量
 function snapAt(date) {
@@ -518,13 +524,14 @@ function snapAt(date) {
 }
 // 回傳 null＝不比對；{ why }＝不能比對的原因；{ rows, alerts }＝比對結果
 function diffOf(r) {
-  if (r.slot !== '晚上') return null;
-  if (!_hist.some(c => c.date === addDays(r.date, -1))) return { why: '前一天沒有盤點，沒辦法比對' };
+  if (r.slot !== '晚上' && r.type !== '食材') return null;
+  const prevIds = new Set(_hist.filter(c => c.date === addDays(r.date, -1)).flatMap(c => (c.items || []).map(x => x.id)));
+  if (!(r.items || []).some(x => prevIds.has(x.id))) return { why: '前一天沒有盤點，沒辦法比對' };
   if (!_orders[r.date]) return { why: '這天沒有輸入店面叫貨量，沒辦法比對' };
   const exp = expectedStock(_items, _supCfg, r.date, _orders, snapAt);
   const rows = (r.items || []).map(x => {
     const it = _items.find(i => i.id === x.id), e = exp[x.id];
-    if (!it || !e) return null;
+    if (!it || !e || !prevIds.has(x.id)) return null;
     const expect = Math.round(e.expect * 100) / 100;
     return { x, it, e, expect, d: Math.round((x.counted - expect) * 100) / 100, alert: diffAlert(it, expect, x.counted) };
   }).filter(Boolean);
@@ -816,7 +823,7 @@ window.saveCount = async () => {
     clearDraft();
     renderDone(items.length);
     show('vDone');
-    if (_cur.slot === '晚上') showDoneDiff(countRef.id);
+    if (_cur.slot === '晚上' || _cur.type === '食材') showDoneDiff(countRef.id);
   } catch (e) {
     showToast('儲存失敗，請檢查網路後重試', 'error');
   } finally {
