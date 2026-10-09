@@ -270,7 +270,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, query, where, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS, loadSuppliers, expectedStock, diffAlert, addDays, KITCHEN, kitchenName, kf, ofKitchen } from "./app.js?v=20261009m";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS, loadSuppliers, expectedStock, diffAlert, addDays, KITCHEN, kitchenName, kf, ofKitchen } from "./app.js?v=20261009n";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -342,7 +342,8 @@ function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {
 async function loadItems() {
   const items = await loadStockItems(db);
   // 盤點時歸在成品的食材（例：生鮮雞肉）在盤點頁當作成品；realKind 是原本的種類
-  return items.map(i => ({ ...i, kind: i.countAs || i.kind, realKind: i.kind }));
+  // 設定「不用盤點」的品項（例：雞油）不列出
+  return items.filter(i => !i.noCount).map(i => ({ ...i, kind: i.countAs || i.kind, realKind: i.kind }));
 }
 // 這間央廚最近 10 次盤點（三間的紀錄放在一起，多讀一些再挑出這間的）
 async function loadRecent() {
