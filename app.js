@@ -3,6 +3,27 @@ import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/fireba
 
 export const STORES = ['總公司','鑫耀鑫','鑫營','新生北','景新','梁鑫','泉州','府中','心惦','巷日','大直','福城','幸福','新莊'];
 
+// ── 央廚：品項、配方、廠商名單三間共用；庫存、安全庫存、盤點、叫貨、廠商送貨設定各自一份 ──
+export const KITCHENS = [{ id: 'ha', name: '華安央廚' }, { id: 'xj', name: '鑫雞肉央廚' }, { id: 'xz', name: '新莊央廚' }];
+// 分成三間以前的資料都是華安的：華安沒有自己的欄位時沿用舊欄位
+const LEGACY = 'ha';
+// 目前操作的央廚（getUserData 設定）：員工固定是帳號所屬的央廚，管理員可以切換
+export let KITCHEN = LEGACY;
+const KITCHEN_KEY = 'kitchen';
+export const kitchenName = (k = KITCHEN) => KITCHENS.find(x => x.id === k)?.name || '';
+// 這間央廚自己的欄位路徑，例：stockBy.ha（給 updateDoc／batch.update 用）
+export const kf = (f) => `${f}By.${KITCHEN}`;
+// 盤點、庫存紀錄、叫貨量是不是這間央廚的（舊資料沒有 kitchen＝華安）
+export const ofKitchen = (r) => (r.kitchen || LEGACY) === KITCHEN;
+// 店面叫貨量的文件 id：華安沿用舊的「日期」，其他央廚加上代號
+export const orderDocId = (date) => KITCHEN === LEGACY ? date : `${KITCHEN}_${date}`;
+// 這間央廚自己的值：有自己的就用，華安沒有就用舊欄位，其他央廚從 0（或預設）開始
+const mineOf = (map, legacy, dflt) => map && map[KITCHEN] !== undefined ? map[KITCHEN] : (KITCHEN === LEGACY ? legacy : dflt);
+export function setKitchen(k) {
+  try { localStorage.setItem(KITCHEN_KEY, k); } catch (e) {}
+  location.reload();
+}
+
 // 配方可用的重量單位（1 台斤 = 16 兩）
 export const WEIGHT_UNITS = ['台斤', '兩'];
 
@@ -38,8 +59,10 @@ export async function loadStockItems(db) {
         .map(r => ({ id: r.id || '', name: r.id ? '' : (r.name || ''), amt: Number(r.amt ?? r.qty), u: WEIGHT_UNITS.includes(r.u) ? r.u : '', qty: Number(r.qty) || 0 }));
       const item = {
         id: d.id, name: e.name || '', kind, category: e.category || '',
-        unit: e.unit || '', spec: e.spec || '', stock: Number(e.stock) || 0,
-        safety: Number(e.safety) || 0, sort: e.sort ?? 999, recipe,
+        // 庫存、安全庫存、有沒有盤點過：每間央廚各自一份
+        unit: e.unit || '', spec: e.spec || '', stock: Number(mineOf(e.stockBy, e.stock, 0)) || 0,
+        safety: Number(mineOf(e.safetyBy, e.safety, 0)) || 0, sort: e.sort ?? 999, recipe,
+        counted: !!mineOf(e.lastCountBy, e.lastCountAt, null),
         // 配方是一批的用量，這一批可以做出 yield 單位的本品項（舊資料沒有就是 1）
         yield: Number(e.yield) > 0 ? Number(e.yield) : 1,
         // 整批生產：一次至少做一整批（配方的產出量），不能拆開做，例如辣椒一次 3 小鍋
@@ -74,7 +97,12 @@ export async function loadSuppliers(db, items = []) {
   // lead：要提前幾天叫（今天叫明天到＝1、今天叫後天到＝2）
   // rules：{品項id: { min: 最低叫貨量, with: 要搭配一起叫的品項id }}
   // off：不送貨的星期（0＝週日 … 6＝週六）；note：最低叫貨量、幾點前要叫等備註
-  const list = snap.docs.map(d => ({ id: d.id, name: d.data().name || '', off: d.data().off || [], note: d.data().note || '', rules: d.data().rules || {}, lead: Number(d.data().lead) || 1 })).filter(s => s.name);
+  // 送貨設定每間央廚各自一份（byKitchen.ha …）；同一家廠商在不同央廚可以不同天叫、不同天到
+  const list = snap.docs.map(d => {
+    const e = d.data();
+    const c = mineOf(e.byKitchen, e, {}) || {};
+    return { id: d.id, name: e.name || '', off: c.off || [], note: c.note || '', rules: c.rules || {}, lead: Number(c.lead) || 1 };
+  }).filter(s => s.name);
   items.forEach(i => {
     if (i.supplier && !list.some(s => s.name === i.supplier)) list.push({ id: '', name: i.supplier, off: [], note: '', rules: {}, lead: 1 });
   });
@@ -310,23 +338,32 @@ const MANAGER_TITLES = ['廠長', '副廠長'];
 export async function getUserData(db, user) {
   const cacheKey = 'ud_' + user.uid;
   const cached = sessionStorage.getItem(cacheKey);
-  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  if (cached) { try { return useKitchen(JSON.parse(cached)); } catch(e) {} }
   const idNo = user.email.split('@')[0];
-  let name = idNo, jobTitle = '', store = '';
+  let name = idNo, jobTitle = '', store = '', kitchen = '';
   try {
     const snap = await getDoc(doc(db, 'accounts', user.uid));
     if (snap.exists()) {
       if (snap.data().name) name = snap.data().name;
       jobTitle = snap.data().role || '';
       store = snap.data().store || '';
+      kitchen = snap.data().kitchen || '';
     }
   } catch(e) {}
   let role = 'employee';
   if (ADMIN_EMAILS.includes(user.email)) role = 'admin';
   else if (MANAGER_TITLES.includes(jobTitle)) role = 'manager';
-  const userData = { name, idNo, email: user.email, role, jobTitle, store, uid: user.uid };
+  const userData = { name, idNo, email: user.email, role, jobTitle, store, kitchen, uid: user.uid };
   sessionStorage.setItem(cacheKey, JSON.stringify(userData));
-  return userData;
+  return useKitchen(userData);
+}
+
+// 決定目前的央廚：管理員用上次選的，其他人用帳號所屬的（沒設定＝華安）
+function useKitchen(ud) {
+  let k = ud.kitchen;
+  if (ud.role === 'admin') { try { k = localStorage.getItem(KITCHEN_KEY) || k; } catch (e) {} }
+  KITCHEN = KITCHENS.some(x => x.id === k) ? k : LEGACY;
+  return ud;
 }
 
 export function renderSidebar(ud, activePage, auth) {
@@ -342,9 +379,17 @@ export function renderSidebar(ud, activePage, auth) {
     ...(isAdmin ? ['管理', ['account.html','👥','帳號管理']] : [])
   ] : [];
 
+  // 目前是哪一間央廚：管理員可以切換
+  const brand = document.querySelector('.sb-brand p');
+  if (brand) brand.textContent = kitchenName();
+  const mob = document.querySelector('.mob-title');
+  if (mob && !mob.querySelector('.mob-kitchen')) mob.insertAdjacentHTML('beforeend', `<span class="mob-kitchen">${kitchenName().replace('央廚', '')}</span>`);
   const nav = document.getElementById('sb-nav');
   if (nav) {
-    nav.innerHTML = pages.map(p => typeof p === 'string'
+    const pick = isAdmin ? `<div class="sb-kitchen"><label>目前央廚</label><select onchange="setKitchen(this.value)">${KITCHENS.map(k =>
+      `<option value="${k.id}" ${k.id === KITCHEN ? 'selected' : ''}>${k.name}</option>`).join('')}</select></div>` : '';
+    window.setKitchen = setKitchen;
+    nav.innerHTML = pick + pages.map(p => typeof p === 'string'
       ? `<div class="nav-group">${p}</div>`
       : `<a href="${p[0]}" class="nav-item${p[0]===activePage?' active':''}"><span class="ic">${p[1]}</span>${p[2]}</a>`
     ).join('');
@@ -356,7 +401,7 @@ export function renderSidebar(ud, activePage, auth) {
 
   const userArea = document.getElementById('sb-user-area');
   if (userArea) {
-    const roleLabel = isAdmin ? '管理員' : `${ud.store || ''}${ud.jobTitle || '員工'}`;
+    const roleLabel = isAdmin ? '管理員' : `${kitchenName()} ${ud.jobTitle || '員工'}`;
     userArea.innerHTML = `<div class="uname">${ud.name}</div><div class="urole">${roleLabel}</div>`;
   }
 

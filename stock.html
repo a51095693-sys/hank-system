@@ -199,7 +199,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText } from "./app.js?v=20261009d";
+import { getUserData, showToast, renderSidebar, loadStockItems, fmtQty, escHtml, qtyText, KINDS, loadSuppliers, recipeAmtText, KITCHEN, kf, ofKitchen } from "./app.js?v=20261009k";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -250,8 +250,8 @@ async function loadAll() {
   }
   renderTable();
   try {
-    const snap = await getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(1)));
-    const last = snap.docs[0]?.data();
+    const snap = await getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(30)));
+    const last = snap.docs.map(d => d.data()).find(ofKitchen);
     document.getElementById('stLastCount').textContent = last
       ? `${last.date}・${last.by}` : '尚未盤點';
   } catch (e) { document.getElementById('stLastCount').textContent = '-'; }
@@ -403,18 +403,19 @@ window.saveItem = async () => {
     byproduct: document.getElementById('iByproduct').checked,
     byproductOf: document.getElementById('iByproductOf').value.trim(),
     catty: Math.max(0, parseFloat(document.getElementById('iCatty').value) || 0), ...(_kind === '食材' ? { recipe: [] } : {}),
-    spec: document.getElementById('iSpec').value.trim(),
-    safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0)
+    spec: document.getElementById('iSpec').value.trim()
   };
+  // 安全庫存、庫存每間央廚各自一份
+  const safety = Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0);
   const btn = document.getElementById('itemSaveBtn');
   btn.disabled = true; btn.textContent = '儲存中…';
   try {
     if (id) {
-      await updateDoc(doc(db, 'stockItems', id), data);
+      await updateDoc(doc(db, 'stockItems', id), { ...data, [kf('safety')]: safety });
       showToast('品項已更新', 'success');
     } else {
       const stock = Math.max(0, parseFloat(document.getElementById('iStock').value) || 0);
-      await addDoc(collection(db, 'stockItems'), { recipe: [], ...data, category: '', stock, sort: _items.length, createdAt: serverTimestamp() });
+      await addDoc(collection(db, 'stockItems'), { recipe: [], ...data, category: '', stock: 0, safety: 0, stockBy: { [KITCHEN]: stock }, safetyBy: { [KITCHEN]: safety }, sort: _items.length, createdAt: serverTimestamp() });
       showToast(`品項「${name}」已新增`, 'success');
     }
     closeModal('itemModal');
@@ -480,12 +481,12 @@ window.saveMove = async () => {
   btn.disabled = true; btn.textContent = '登記中…';
   try {
     const batch = writeBatch(db);
-    batch.update(doc(db, 'stockItems', it.id), { stock: after });
+    batch.update(doc(db, 'stockItems', it.id), { [kf('stock')]: after });
     batch.set(doc(collection(db, 'stockMoves')), {
       itemId: it.id, itemName: it.name, unit: it.unit, type: _mvType,
       qty: sign * qty, before: it.stock, after,
       note: document.getElementById('mvNote').value.trim(),
-      by: _ud.name, at: serverTimestamp()
+      kitchen: KITCHEN, by: _ud.name, at: serverTimestamp()
     });
     await batch.commit();
     showToast(`${it.name} ${sign > 0 ? '+' : ''}${qtyText(it, sign * qty)}`, 'success');
@@ -503,7 +504,10 @@ window.openMoves = async () => {
   tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:20px;">載入中…</td></tr>';
   document.getElementById('movesModal').classList.add('open');
   try {
-    const snap = await getDocs(query(collection(db, 'stockMoves'), orderBy('at', 'desc'), limit(100)));
+    // 三間的紀錄放在一起，多讀一些再挑出這間的
+    const all = await getDocs(query(collection(db, 'stockMoves'), orderBy('at', 'desc'), limit(400)));
+    const snap = { docs: all.docs.filter(d => ofKitchen(d.data())).slice(0, 100) };
+    snap.empty = !snap.docs.length;
     if (snap.empty) { tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center" style="padding:20px;">尚無異動紀錄</td></tr>'; return; }
     // 依目前品項設定顯示箱＋包；已刪除的品項只用紀錄上的單位
     const unitOf = (m) => _items.find(i => i.id === m.itemId) || { unit: m.unit, per: 0 };

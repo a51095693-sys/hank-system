@@ -132,3 +132,10 @@ tr:hover td{background:#FFFBF3}
   .table-wrap td:not([data-label])::before{display:none}
 }
 .sb-logo{width:24px;height:24px;border-radius:7px;vertical-align:-6px;margin-right:8px}
+
+/* 央廚切換 */
+.sb-kitchen{padding:4px 16px 12px}
+.sb-kitchen label{display:block;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:4px}
+.sb-kitchen select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-weight:700;font-family:inherit}
+.sb-kitchen select option{color:#2B1D14}
+.mob-kitchen{margin-left:8px;font-size:12px;font-weight:700;background:#F7B500;color:#2B1D14;border-radius:999px;padding:2px 8px;vertical-align:2px}

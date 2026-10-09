@@ -268,9 +268,9 @@ button.inv-li:hover{background:#FFFBF3}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, query, where, orderBy, limit, writeBatch, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, query, where, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS, loadSuppliers, expectedStock, diffAlert, addDays } from "./app.js?v=20261009d";
+import { getUserData, showToast, renderSidebar, todayStr, loadStockItems, fmtQty, escHtml, splitBox, qtyText, KINDS, loadSuppliers, expectedStock, diffAlert, addDays, KITCHEN, kitchenName, kf, ofKitchen } from "./app.js?v=20261009k";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -303,7 +303,8 @@ const COUNT_TYPES = {
 const SLOTS = ['中午', '晚上'];
 const slotNow = () => new Date().getHours() < 15 ? '中午' : '晚上';
 const countTitle = (c) => c.slot ? `${c.slot}盤點` : COUNT_TYPES[c.type].title;
-const DRAFT_KEY = 'inv_draft';
+// 暫存的盤點每間央廚各自一份
+const draftKey = () => KITCHEN === 'ha' ? 'inv_draft' : `inv_draft_${KITCHEN}`;
 
 let _ud = null;
 let _items = [];
@@ -328,21 +329,25 @@ window.show = (id) => {
 };
 
 function readDraft() {
-  try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) { return null; }
+  try { return JSON.parse(localStorage.getItem(draftKey()) || 'null'); } catch (e) { return null; }
 }
 window.saveDraft = (notify) => {
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(_cur)); } catch (e) {}
+  try { localStorage.setItem(draftKey(), JSON.stringify(_cur)); } catch (e) {}
   if (notify) showToast('已暫存，下次可接續盤點', 'success');
 };
-function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {} }
 
 
-// 與 loadStockItems 相同，另外帶出 counted（是否盤點過）
+// 與 loadStockItems 相同（counted＝這間央廚盤點過）
 async function loadItems() {
-  const [items, snap] = await Promise.all([loadStockItems(db), getDocs(collection(db, 'stockItems'))]);
-  const counted = new Set(snap.docs.filter(d => d.data().lastCountAt).map(d => d.id));
+  const items = await loadStockItems(db);
   // 盤點時歸在成品的食材（例：生鮮雞肉）在盤點頁當作成品；realKind 是原本的種類
-  return items.map(i => ({ ...i, counted: counted.has(i.id), kind: i.countAs || i.kind, realKind: i.kind }));
+  return items.map(i => ({ ...i, kind: i.countAs || i.kind, realKind: i.kind }));
+}
+// 這間央廚最近 10 次盤點（三間的紀錄放在一起，多讀一些再挑出這間的）
+async function loadRecent() {
+  const snap = await getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(60)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(ofKitchen).slice(0, 10);
 }
 
 const fmtAt = (ts) => ts?.toDate ? ts.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
@@ -352,16 +357,11 @@ async function loadHome() {
   show('vHome');
   _copyHeader = '';
   const now = new Date();
-  document.getElementById('homeWho').textContent = `華安央廚 · ${_ud.name}`;
+  document.getElementById('homeWho').textContent = `${kitchenName()} · ${_ud.name}`;
   document.getElementById('homeDay').textContent = `${now.getMonth() + 1}/${now.getDate()}（${'日一二三四五六'[now.getDay()]}）`;
   const body = document.getElementById('homeBody');
   try {
-    const [items, snap] = await Promise.all([
-      loadItems(),
-      getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(10)))
-    ]);
-    _items = items;
-    _recent = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    [_items, _recent] = await Promise.all([loadItems(), loadRecent()]);
   } catch (e) {
     body.innerHTML = '<div class="card text-muted text-center">載入失敗，請重新整理</div>';
     return;
@@ -509,9 +509,9 @@ async function loadDiffs() {
     getDocs(collection(db, 'orders')),
     loadSuppliers(db, _items)
   ]);
-  _hist = cs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.at?.toMillis?.() ?? Infinity) - (b.at?.toMillis?.() ?? Infinity));
+  _hist = cs.docs.map(d => ({ id: d.id, ...d.data() })).filter(ofKitchen).sort((a, b) => (a.at?.toMillis?.() ?? Infinity) - (b.at?.toMillis?.() ?? Infinity));
   _orders = {};
-  os.docs.forEach(d => { const q = d.data().qty || {}; if (Object.keys(q).length) _orders[d.id] = q; });
+  os.docs.forEach(d => { const o = d.data(), q = o.qty || {}; if (ofKitchen(o) && Object.keys(q).length) _orders[o.date || d.id] = q; });
   _supCfg = {};
   sups.forEach(sp => { _supCfg[sp.name] = sp; });
   _diffs = {};
@@ -618,12 +618,12 @@ window.saveDetailEdit = async () => {
     changes.forEach(({ x, n, d }) => {
       const it = _items.find(i => i.id === x.id);
       if (!it) return;
-      batch.update(doc(db, 'stockItems', x.id), { stock: increment(d) });
+      batch.update(doc(db, 'stockItems', x.id), { [kf('stock')]: Math.round((it.stock + d) * 10000) / 10000 });
       batch.set(doc(collection(db, 'stockMoves')), {
         itemId: x.id, itemName: x.name, unit: x.unit, type: '盤點修正',
         qty: d, before: it.stock, after: Math.round((it.stock + d) * 10000) / 10000,
         note: `${r.date} ${r.title}：${fmtQty(x.counted)} → ${fmtQty(n)}`,
-        countId: r.id, by: _ud.name, at: serverTimestamp()
+        countId: r.id, kitchen: KITCHEN, by: _ud.name, at: serverTimestamp()
       });
     });
     await batch.commit();
@@ -805,18 +805,18 @@ window.saveCount = async () => {
     const batch = writeBatch(db);
     const countRef = doc(collection(db, 'stockCounts'));
     batch.set(countRef, {
-      date: todayStr(), type: _cur.type, slot: _cur.slot || '', title: countTitle(_cur),
+      date: todayStr(), kitchen: KITCHEN, type: _cur.type, slot: _cur.slot || '', title: countTitle(_cur),
       by: _ud.name, at: serverTimestamp(), total: items.length, items
     });
     items.forEach(r => {
       batch.update(doc(db, 'stockItems', r.id), r.diff !== 0
-        ? { stock: r.counted, lastCountAt: serverTimestamp() }
-        : { lastCountAt: serverTimestamp() });
+        ? { [kf('stock')]: r.counted, [kf('lastCount')]: serverTimestamp() }
+        : { [kf('lastCount')]: serverTimestamp() });
       if (r.diff === 0) return;
       batch.set(doc(collection(db, 'stockMoves')), {
         itemId: r.id, itemName: r.name, unit: r.unit, type: r.first ? '首次建檔' : '盤點調整',
         qty: r.diff, before: r.system, after: r.counted, note: '',
-        countId: countRef.id, by: _ud.name, at: serverTimestamp()
+        countId: countRef.id, kitchen: KITCHEN, by: _ud.name, at: serverTimestamp()
       });
     });
     await batch.commit();
@@ -835,8 +835,7 @@ window.saveCount = async () => {
 // ── 4. 完成 ──
 async function showDoneDiff(id) {
   try {
-    const snap = await getDocs(query(collection(db, 'stockCounts'), orderBy('at', 'desc'), limit(10)));
-    _recent = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _recent = await loadRecent();
     await loadDiffs();
     const df = _diffs[id];
     if (!df?.rows) return;

@@ -201,7 +201,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText } from "./app.js?v=20261009d";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, loadSuppliers, fmtQty, WEEKDAYS, offText, KITCHEN, kitchenName, kf } from "./app.js?v=20261009k";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -286,7 +286,7 @@ window.openSup = (k) => {
   const sp = _sups[k];
   if (!sp) return;
   _supK = k;
-  document.getElementById('supMName').textContent = sp.name;
+  document.getElementById('supMName').textContent = `${sp.name}・${kitchenName()}`;
   document.getElementById('supDays').innerHTML = [...WEEKDAYS].map((d, i) =>
     `<label><input type="checkbox" value="${i}" ${sp.off.includes(i) ? '' : 'checked'}>${d}</label>`).join('');
   document.getElementById('supNote').value = sp.note;
@@ -319,10 +319,11 @@ window.saveSup = async () => {
   btn.disabled = true;
   try {
     // 舊資料的廠商（只寫在品項上）還沒有文件，這時候補建
-    if (sp.id) await updateDoc(doc(db, 'suppliers', sp.id), { off, note, rules, lead });
-    else await addDoc(collection(db, 'suppliers'), { name: sp.name, off, note, rules, lead, createdAt: serverTimestamp() });
+    // 送貨設定只改這間央廚的
+    if (sp.id) await updateDoc(doc(db, 'suppliers', sp.id), { [`byKitchen.${KITCHEN}`]: { off, note, rules, lead } });
+    else await addDoc(collection(db, 'suppliers'), { name: sp.name, byKitchen: { [KITCHEN]: { off, note, rules, lead } }, createdAt: serverTimestamp() });
     closeModal('supModal');
-    showToast(`「${sp.name}」送貨設定已儲存`, 'success');
+    showToast(`「${sp.name}」${kitchenName()}的送貨設定已儲存`, 'success');
     loadAll();
   } catch (e) {
     showToast('儲存失敗，請重試', 'error');
@@ -456,24 +457,25 @@ window.saveItem = async () => {
     formErr(`「${supplier || '未設定廠商'}」已經有「${name}」了，請換一個名稱`); return;
   }
   formErr('');
+  // 安全庫存、庫存每間央廚各自一份
+  const safety = Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0);
   const data = {
     name, unit,
     supplier,
     catty: Math.max(0, parseFloat(document.getElementById('iCatty').value) || 0),
     spec: document.getElementById('iSpec').value.trim(),
-    safety: Math.max(0, parseFloat(document.getElementById('iSafety').value) || 0),
     countAs: document.getElementById('iCountAs').checked ? '成品' : ''
   };
   const btn = document.getElementById('itemSaveBtn');
   btn.disabled = true; btn.textContent = '儲存中…';
   try {
     if (id) {
-      await updateDoc(doc(db, 'stockItems', id), data);
+      await updateDoc(doc(db, 'stockItems', id), { ...data, [kf('safety')]: safety });
       showToast('食材已更新', 'success');
     } else {
       const stock = Math.max(0, parseFloat(document.getElementById('iStock').value) || 0);
       await addDoc(collection(db, 'stockItems'), {
-        ...data, kind: '食材', category: '', recipe: [], stock, sort: _items.length, createdAt: serverTimestamp()
+        ...data, kind: '食材', category: '', recipe: [], stock: 0, safety: 0, stockBy: { [KITCHEN]: stock }, safetyBy: { [KITCHEN]: safety }, sort: _items.length, createdAt: serverTimestamp()
       });
       showToast(`食材「${name}」已新增`, 'success');
     }
@@ -512,12 +514,12 @@ window.saveIn = async () => {
   btn.disabled = true; btn.textContent = '登記中…';
   try {
     const batch = writeBatch(db);
-    batch.update(doc(db, 'stockItems', it.id), { stock: after });
+    batch.update(doc(db, 'stockItems', it.id), { [kf('stock')]: after });
     batch.set(doc(collection(db, 'stockMoves')), {
       itemId: it.id, itemName: it.name, unit: it.unit, type: '進貨',
       qty, before: it.stock, after,
       note: document.getElementById('inNote').value.trim(),
-      by: _ud.name, at: serverTimestamp()
+      kitchen: KITCHEN, by: _ud.name, at: serverTimestamp()
     });
     await batch.commit();
     showToast(`${it.name} +${qtyText(it, qty)}`, 'success');
