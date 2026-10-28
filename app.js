@@ -9,6 +9,16 @@ const LEGACY = 'ha';
 export let KITCHEN = LEGACY;
 const KITCHEN_KEY = 'kitchen';
 export const kitchenName = (k = KITCHEN) => KITCHENS.find(x => x.id === k)?.name || '';
+// 各央廚負責的店家（照 NK「負責店家」，id 用 NK 店家編號）
+export const STORES = {
+  ha: [{ id: 'IN-01', name: '鑫耀鑫餐廳' }, { id: 'IN-05', name: '景新雞肉飯' }, { id: 'IN-06', name: '巷日雞肉飯' }, { id: 'IN-08', name: '心惦雞肉飯' },
+    { id: 'ZH-01', name: '海山魯肉飯' }, { id: 'ZH-04', name: '食咣雞肉飯' }, { id: 'ZH-05', name: '哇哥雞肉飯' }],
+  xj: [{ id: 'IN-02', name: '梁鑫雞肉飯' }, { id: 'IN-03', name: '鑫營雞肉本鋪' }, { id: 'IN-07', name: '大直讚雞肉飯' }, { id: 'NK002', name: '成功呷雞肉飯' },
+    { id: 'ZH-02', name: '海山雞肉飯' }],
+  xz: [{ id: 'IN-04', name: '府中雞肉飯' }, { id: 'IN-09', name: '幸福雞肉飯' }, { id: 'IN-10', name: '福城雞肉飯' }, { id: 'NK001', name: '沐香雞肉飯' },
+    { id: 'ZH-03', name: '土城雞肉飯' }],
+};
+export const storesOf = (k = KITCHEN) => STORES[k] || [];
 // 這間央廚自己的欄位路徑，例：stockBy.ha（給 updateDoc／batch.update 用）
 export const kf = (f) => `${f}By.${KITCHEN}`;
 // 盤點、庫存紀錄、叫貨量是不是這間央廚的（舊資料沒有 kitchen＝華安）

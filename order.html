@@ -39,6 +39,11 @@
 .od-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px}
 .od-card h2{font-size:17px;font-weight:900;margin-bottom:4px}
 .od-card .hint{font-size:13px;color:var(--mute);margin-bottom:12px}
+.od-stores{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.od-st{min-height:40px;padding:4px 12px;border-radius:999px;border:1.5px solid #E0D3BF;background:#fff;color:var(--ink);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.od-st.done{border-color:var(--green);color:var(--green)}
+.od-st.on{background:var(--green);border-color:var(--green);color:#fff}
+.od-cur{font-size:15px;font-weight:900;color:var(--green);margin:10px 0 2px}
 .od-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
 .od-row:first-of-type{border-top:none}
 .od-row .nm{flex:1;min-width:0;font-size:16px;font-weight:700}
@@ -92,14 +97,15 @@
   <main class="main">
     <div class="od">
       <div class="od-top">
-        <div><h1>🧾 叫貨計算</h1><div class="od-steps"><span>① 輸入店面要的量</span><span>② 照「今天要叫的貨」打給廠商</span><span>③ 照生產單做</span></div></div>
+        <div><h1>🧾 叫貨計算</h1><div class="od-steps"><span>① 輸入每家店要的量</span><span>② 照「今天要叫的貨」打給廠商</span><span>③ 照生產單做</span></div></div>
         <label class="od-date">店面到貨日 <input type="date" class="form-control" id="odDate" onchange="loadOrder()"></label>
       </div>
 
       <div class="od-grid">
         <section class="od-card">
           <h2><span class="step">1</span>店面要的量</h2>
-          <div class="hint">所有店面加起來的總量，空白代表 0；輸完按最下面「儲存」</div>
+          <div class="hint">先點店家，再輸入那家要的量，系統會自動加總；空白代表 0。全部輸完按最下面「儲存」</div>
+          <div class="od-stores" id="odStores"></div>
           <a class="od-jump" href="#odResult">↓ 直接看今天要叫的貨</a>
           <div id="odList"><div class="text-muted">載入中…</div></div>
           <button class="od-save" id="odSave" onclick="saveOrder()">儲存</button>
@@ -118,7 +124,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, recipeAmtText, recipeQty, fmtQty, planNeeds, supplierPlan, loadSuppliers, WEEKDAYS, KITCHEN, orderDocId } from "./app.js?v=20261009n";
+import { getUserData, showToast, renderSidebar, loadStockItems, escHtml, qtyText, splitBox, recipeAmtText, recipeQty, fmtQty, planNeeds, supplierPlan, loadSuppliers, WEEKDAYS, KITCHEN, orderDocId, storesOf } from "./app.js?v=20261028a";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -129,8 +135,13 @@ window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); wi
 
 let _ud = null;
 let _items = [];
-// 店面叫貨量 {成品id: 數量（品項單位，可含小數）}
+// 店面叫貨量（所有店加總）{成品id: 數量（品項單位，可含小數）}
 let _qty = {};
+// 每家店的叫貨量 {店家id: {成品id: 數量}}；OTHER＝沒分店的量（舊資料、臨時加的）
+let _byStore = {};
+const OTHER = 'other';
+let _stores = [];
+let _store = '';
 // 今天起 14 天內已輸入的店面叫貨量 {日期: {成品id: 數量}}
 let _days = {};
 const TODAY = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
@@ -149,6 +160,8 @@ onAuthStateChanged(auth, async user => {
   _ud = await getUserData(db, user);
   if (_ud.role !== 'admin' && _ud.role !== 'manager') { window.location.href = 'inventory.html'; return; }
   renderSidebar(_ud, 'order.html', auth);
+  _stores = [...storesOf(), { id: OTHER, name: '其他' }];
+  _store = _stores[0].id;
   // 預設算明天的貨
   const t = new Date(); t.setDate(t.getDate() + 1);
   document.getElementById('odDate').value = ymd(t);
@@ -172,6 +185,8 @@ async function loadWindow() {
 window.loadOrder = async () => {
   const date = document.getElementById('odDate').value;
   _qty = {};
+  _byStore = {};
+  _store = _stores[0].id;
   document.getElementById('odSaved').textContent = '';
   if (date) {
     try {
@@ -179,6 +194,8 @@ window.loadOrder = async () => {
       if (snap.exists()) {
         const d = snap.data();
         _qty = d.qty || {};
+        // 還沒分店輸入以前存的總量，放到「其他」
+        _byStore = d.byStore ? JSON.parse(JSON.stringify(d.byStore)) : (Object.keys(_qty).length ? { [OTHER]: { ..._qty } } : {});
         if (date > TODAY && Object.keys(_qty).length) _days[date] = _qty;
         const at = d.at?.toDate ? d.at.toDate().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
         document.getElementById('odSaved').textContent = `已儲存：${d.by || ''} ${at}`;
@@ -190,16 +207,33 @@ window.loadOrder = async () => {
 };
 
 // ── 輸入叫貨量（只有成品）──
+const orderItems = () => _items.filter(i => i.kind === '成品' && !i.internal);
+const storeName = (id) => _stores.find(s => s.id === id)?.name || id;
+
+// 店家按鈕：有輸入的店打勾
+function renderStores() {
+  document.getElementById('odStores').innerHTML = _stores.map(s => {
+    const has = Object.keys(_byStore[s.id] || {}).length > 0;
+    return `<button type="button" class="od-st${s.id === _store ? ' on' : ''}${has ? ' done' : ''}" onclick="pickStore('${s.id}')">${has ? '✓ ' : ''}${escHtml(s.name)}</button>`;
+  }).join('');
+}
+
+window.pickStore = (id) => { _store = id; renderInputs(); };
+
+const totalText = (i) => `全部店合計 ${_qty[i.id] ? qtyText(i, _qty[i.id]) : 0}・央廚庫存 ${qtyText(i, i.stock)}`;
+
 function renderInputs() {
+  renderStores();
   // 內部使用的品項店面不會叫，不列出
-  const list = _items.filter(i => i.kind === '成品' && !i.internal);
+  const list = orderItems();
   if (!list.length) {
     document.getElementById('odList').innerHTML = '<div class="text-muted" style="font-size:14px;">還沒有「成品」品項，請到品項庫存設定種類</div>';
     return;
   }
   const keys = 'onfocus="this.select()" onkeydown="nextOnEnter(event)"';
-  document.getElementById('odList').innerHTML = list.map(i => {
-    const v = _qty[i.id];
+  const mine = _byStore[_store] || {};
+  document.getElementById('odList').innerHTML = `<div class="od-cur">${escHtml(storeName(_store))}${_store === OTHER ? ' <span style="font-size:12px;font-weight:500;color:var(--mute);">（沒分店的量，例如以前輸入的總量、臨時加單）</span>' : ''}</div>` + list.map(i => {
+    const v = mine[i.id];
     let inputs;
     if (i.per) {
       const { b, p } = v ? splitBox(v, i.per) : { b: '', p: '' };
@@ -209,7 +243,7 @@ function renderInputs() {
       inputs = `<input type="number" inputmode="decimal" min="0" step="any" value="${v || ''}" placeholder="0" aria-label="${escHtml(i.name)} 叫貨量" data-big ${keys} oninput="setQty('${i.id}')"><span class="u">${escHtml(i.unit)}</span>`;
     }
     return `<div class="od-row" id="orow-${i.id}">
-      <div class="nm">${escHtml(i.label)}<div class="stk">央廚庫存 ${escHtml(qtyText(i, i.stock))}</div></div>
+      <div class="nm">${escHtml(i.label)}<div class="stk" id="otot-${i.id}">${escHtml(totalText(i))}</div></div>
       <div class="od-in">${inputs}</div>
     </div>`;
   }).join('');
@@ -222,21 +256,40 @@ window.setQty = (id) => {
   const b = parseFloat(row.querySelector('[data-big]').value) || 0;
   const p = it.per ? (parseFloat(row.querySelector('[data-sub]').value) || 0) : 0;
   const q = b + (it.per ? p / it.per : 0);
-  if (q > 0) _qty[id] = q; else delete _qty[id];
+  const mine = _byStore[_store] || (_byStore[_store] = {});
+  if (q > 0) mine[id] = q; else delete mine[id];
+  if (!Object.keys(mine).length) delete _byStore[_store];
+  sumStores();
+  const tot = document.getElementById('otot-' + id);
+  if (tot) tot.textContent = totalText(it);
+  renderStores();
   const date = document.getElementById('odDate').value;
   if (date > TODAY) { if (Object.keys(_qty).length) _days[date] = _qty; else delete _days[date]; }
   renderResult();
 };
 
 // 按 Enter 跳到下一格
+// 最後一格按 Enter 換下一家店
 window.nextOnEnter = (e) => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
   const all = [...document.querySelectorAll('#odList input')];
   const next = all[all.indexOf(e.target) + 1];
   e.target.blur();
-  if (next) next.focus();
+  if (next) { next.focus(); return; }
+  const k = _stores.findIndex(s => s.id === _store);
+  if (k < _stores.length - 1) {
+    pickStore(_stores[k + 1].id);
+    document.getElementById('odStores').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelector('#odList input')?.focus({ preventScroll: true });
+  }
 };
+
+// 各店加起來＝店面叫貨量
+function sumStores() {
+  _qty = {};
+  Object.values(_byStore).forEach(m => Object.entries(m).forEach(([id, q]) => { _qty[id] = Math.round(((_qty[id] || 0) + q) * 10000) / 10000; }));
+}
 
 window.saveOrder = async () => {
   const date = document.getElementById('odDate').value;
@@ -244,7 +297,7 @@ window.saveOrder = async () => {
   const btn = document.getElementById('odSave');
   btn.disabled = true; btn.textContent = '儲存中…';
   try {
-    await setDoc(doc(db, 'orders', orderDocId(date)), { date, kitchen: KITCHEN, qty: _qty, by: _ud.name, at: serverTimestamp() });
+    await setDoc(doc(db, 'orders', orderDocId(date)), { date, kitchen: KITCHEN, qty: _qty, byStore: _byStore, by: _ud.name, at: serverTimestamp() });
     showToast(`已儲存 ${md(date)} 叫貨量`, 'success');
     document.getElementById('odSaved').textContent = `已儲存：${_ud.name} 剛剛`;
     if (window.innerWidth < 1000) document.getElementById('odResult').scrollIntoView({ behavior: 'smooth' });
