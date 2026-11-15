@@ -383,11 +383,11 @@ export function renderSidebar(ud, activePage, auth) {
   // 分組：每天要做的事放最上面，設定類放下面
   const pages = (isAdmin || isManager) ? [
     '每天',
-    ['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],
+    ['inventory.html','📦','盤點'],['order.html','🧾','叫貨計算'],['schedule.html','📅','每月班表'],
     '設定',
     ['stock.html','🗃️','品項庫存'],['recipe.html','🧪','配方設定'],['ingredient.html','🥬','食材與廠商'],
     ...(isAdmin ? ['管理', ['account.html','👥','帳號管理']] : [])
-  ] : [];
+  ] : [['inventory.html','📦','盤點'],['schedule.html','📅','班表']];  // 員工：盤點、看班表
 
   // 目前是哪一間央廚：管理員可以切換
   const brand = document.querySelector('.sb-brand p');

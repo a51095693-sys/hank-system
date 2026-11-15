@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2B1D14">
+<meta name="apple-mobile-web-app-title" content="央廚盤點">
+<title>央廚盤點 - 每月班表</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
+<link rel="stylesheet" href="style.css?v=20261115a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+.sc-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.sc-month{font-size:18px;font-weight:900;min-width:150px;text-align:center}
+.sc-save{font-size:12px;color:var(--text3);margin-left:auto}
+.sc-legend{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sc-brush{border:2px solid transparent;border-radius:10px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--text1);box-shadow:0 0 0 1px var(--border) inset}
+.sc-brush .code{display:inline-block;min-width:26px;padding:2px 6px;border-radius:6px;text-align:center}
+.sc-brush .tm{font-size:11px;color:var(--text2);font-weight:500}
+.sc-brush.on{border-color:var(--primary);box-shadow:0 0 0 3px rgba(194,74,22,.15)}
+.sc-hint{font-size:12px;color:var(--text2);margin-top:8px}
+.wk{margin-bottom:14px;overflow-x:auto}
+.wk table{border-collapse:collapse;width:100%;min-width:560px;table-layout:fixed;font-size:13px}
+.wk th,.wk td{border:1px solid var(--border);padding:0;text-align:center;height:34px}
+.wk th{background:var(--surface2);font-size:12px;color:var(--text2);padding:4px 2px;white-space:normal}
+.wk th.nm,.wk td.nm{width:84px;text-align:left;padding:0 8px;font-weight:700;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk th .dd{display:block;font-size:13px;color:var(--text1);font-weight:700}
+.wk th.we{background:#FFF0D1}
+.wk th.out{opacity:.6}
+.wk th.today{background:#F7B500;color:#2B1D14}
+.wk th .note{display:block;font-size:11px;color:var(--danger);font-weight:700;line-height:1.2}
+.wk td.c{font-weight:900;font-size:14px;cursor:default;user-select:none}
+.wk.edit td.c,.wk.edit th.d{cursor:pointer}
+.wk.edit td.c:hover{outline:2px solid var(--primary);outline-offset:-2px}
+.wk td.c.txt{font-size:11px;font-weight:700;color:var(--danger);line-height:1.2}
+.wk tr.me td{background:#FFFBEA}
+.wk tr.me td.nm{color:var(--primary)}
+.wk tr.cnt td{background:var(--surface2);font-size:11px;color:var(--text2);height:26px;font-weight:700}
+.sc-sum table{font-size:13px}
+.sc-sum td,.sc-sum th{text-align:center}
+.sc-sum td:first-child,.sc-sum th:first-child{text-align:left}
+.st-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.st-row input{min-width:0}
+@media(max-width:768px){
+  .sc-month{font-size:16px;min-width:0;flex:1}
+  .sc-save{flex:1 1 100%;margin-left:0}
+  .wk table{min-width:0;font-size:12px}
+  .wk th.nm,.wk td.nm{width:54px;padding:0 4px;font-size:12px}
+  .wk th{font-size:11px;padding:3px 0}
+  .wk th .dd{font-size:12px}
+  .wk td.c{font-size:13px}
+  .wk tr.cnt td{font-size:10px}
+}
+@media print{
+  .sidebar,.mob-header,.no-print,.toast{display:none!important}
+  .main{margin:0;padding:0}
+  body{background:#fff}
+  .card{box-shadow:none;border:none;padding:0}
+  .wk{break-inside:avoid;overflow:visible}
+  .wk table{min-width:0}
+  .wk td.c:hover{outline:none}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="mob-header">
+  <button class="mob-menu-btn" onclick="toggleMenu()">☰</button>
+  <span class="mob-title">📅 每月班表</span>
+  <span></span>
+</div>
+<div class="mob-overlay" id="overlay" onclick="toggleMenu()"></div>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><h2><img src="icon.svg" alt="" class="sb-logo">央廚盤點</h2><p>庫存管理</p></div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-user" id="sb-user-area"><div class="uname" style="color:rgba(255,255,255,.4);font-size:12px;">載入中…</div></div>
+  </aside>
+  <main class="main">
+    <div class="page-title" id="printTitle">📅 每月班表</div>
+
+    <div class="card no-print">
+      <div class="sc-bar">
+        <button class="btn btn-outline btn-sm" onclick="goMonth(-1)">‹ 上個月</button>
+        <div class="sc-month" id="monthLabel"></div>
+        <button class="btn btn-outline btn-sm" onclick="goMonth(1)">下個月 ›</button>
+        <button class="btn btn-outline btn-sm" onclick="goMonth(0)">本月</button>
+        <span class="sc-save" id="saveState"></span>
+      </div>
+      <div class="sc-bar editor-only hidden">
+        <button class="btn btn-outline btn-sm" onclick="openStaff()">👤 排班人員</button>
+        <button class="btn btn-outline btn-sm" onclick="openShifts()">⏰ 班別設定</button>
+        <button class="btn btn-outline btn-sm" onclick="openImport()">📋 從試算表貼上</button>
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ 列印</button>
+      </div>
+      <div class="sc-legend" id="legend"></div>
+      <div class="sc-hint editor-only hidden">先點上面的班別，再點格子填上去；點日期可以加備註（例：元旦公休）。改了會自動儲存。</div>
+    </div>
+
+    <div class="card">
+      <div id="weeks"><div class="text-muted text-center" style="padding:24px;">載入中…</div></div>
+    </div>
+
+    <div class="card sc-sum">
+      <div style="font-weight:700;margin-bottom:10px;">本月統計</div>
+      <div style="overflow-x:auto"><table id="sumTable"></table></div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 排班人員 -->
+<div class="modal-bg" id="staffModal">
+  <div class="modal">
+    <div class="modal-title">👤 排班人員（<span id="staffMonth"></span>）</div>
+    <label class="form-label">一行一個名字，照這個順序排</label>
+    <textarea class="form-control" id="staffText" style="min-height:260px;font-size:15px;line-height:1.7"></textarea>
+    <div class="sc-hint">只改這個月；下個月還沒設定時會沿用這個月的名單。拿掉名字，他這個月的班也會一起刪掉。</div>
+    <div class="flex gap-2 mt-4" style="justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('staffModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveStaff()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 班別設定 -->
+<div class="modal-bg" id="shiftModal">
+  <div class="modal">
+    <div class="modal-title">⏰ 班別設定（<span id="shiftKitchen"></span>）</div>
+    <div class="flex gap-2" style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px">
+      <span style="width:64px">代號</span><span style="flex:1">時間／說明</span><span style="width:52px">算上班</span><span style="width:28px"></span>
+    </div>
+    <div id="shiftRows"></div>
+    <button class="btn btn-outline btn-sm" onclick="addShiftRow()">＋ 新增班別</button>
+    <div class="sc-hint">「算上班」的班別會算進每天上班人數和每人上班天數。</div>
+    <div class="flex gap-2 mt-4" style="justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('shiftModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveShifts()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 從試算表貼上 -->
+<div class="modal-bg" id="importModal">
+  <div class="modal" style="width:560px">
+    <div class="modal-title">📋 從 Google 試算表貼上</div>
+    <div class="sc-hint" style="margin:0 0 8px">在試算表選取整個月的班表（含「姓名」和日期那兩行），複製後貼在下面。貼上的日期會蓋掉這個月原本的內容。</div>
+    <textarea class="form-control" id="importText" style="min-height:220px;font-size:12px" placeholder="姓名	一	二	三…&#10;	11月30日	12月1日…&#10;鄭恩閎			D	D…" oninput="previewImport()"></textarea>
+    <div class="sc-hint" id="importPreview"></div>
+    <div class="flex gap-2 mt-4" style="justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('importModal')">取消</button>
+      <button class="btn btn-primary" id="importBtn" onclick="doImport()" disabled>匯入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 其他文字 -->
+<div class="modal-bg" id="textModal">
+  <div class="modal" style="width:360px">
+    <div class="modal-title" id="textTitle"></div>
+    <input type="text" class="form-control" id="textInput" maxlength="12" style="font-size:15px">
+    <div class="flex gap-2 mt-4" style="justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('textModal')">取消</button>
+      <button class="btn btn-primary" id="textOk">確定</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { getUserData, showToast, renderSidebar, todayStr, escHtml, addDays, dow, WEEKDAYS, KITCHEN, kitchenName } from "./app.js?v=20261115a";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app, 'default');
+
+window.toggleMenu = () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); };
+window.doSignOut = async () => { sessionStorage.clear(); await signOut(auth); window.location.href = 'index.html'; };
+window.closeModal = (id) => document.getElementById(id).classList.remove('open');
+['staffModal', 'shiftModal', 'importModal', 'textModal'].forEach(id =>
+  document.getElementById(id).addEventListener('click', e => { if (e.target.id === id) closeModal(id); }));
+
+// ── 班別：每間央廚各自一份（scheduleConfig/{央廚}），沒設定就用華安試算表的班別 ──
+// work：算上班（每天上班人數、每人上班天數）
+const DEFAULT_SHIFTS = [
+  { code: 'A', time: '6:00～17:00', work: true },
+  { code: 'D', time: '8:00～19:00', work: true },
+  { code: '車', time: '送貨', work: true },
+  { code: '休', time: '休假', work: false },
+  { code: '特', time: '特休', work: false },
+];
+const COLORS = [['#FFE7A3', '#6B4500'], ['#FFD3BD', '#8A2E05'], ['#D6E8FF', '#1E4E8C'], ['#ECE6DC', '#6B5A4A'], ['#D9F2DF', '#1F6B3A'], ['#F3DDF7', '#6B2A7A'], ['#FFE0E6', '#9B1C3A']];
+const colorOf = (code) => { const i = _shifts.findIndex(s => s.code === code); return i < 0 ? null : COLORS[i % COLORS.length]; };
+
+// ── 一個月的班表：跟試算表一樣一週一塊，列出有碰到這個月的每一週 ──
+// 例：12 月＝11/30（一）～1/3（日）。月初、月底那週兩個月都會出現，但是同一份資料：
+// 每天的班存在那天所在月份的文件（schedules/{央廚}_{年-月}），改哪邊都一樣
+const ymOf = (s) => s.slice(0, 7);
+const mondayOf = (s) => addDays(s, -((dow(s) + 6) % 7));
+const nextYm = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+function weeksOf(ym) {
+  const end = nextYm(ym, 1) + '-01';
+  const weeks = [];
+  for (let s = mondayOf(ym + '-01'); s < end; s = addDays(s, 7)) weeks.push([0, 1, 2, 3, 4, 5, 6].map(i => addDays(s, i)));
+  return weeks;
+}
+const mdText = (s) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
+const docId = (ym) => `${KITCHEN}_${ym}`;
+
+let _ud = null, _canEdit = false, _ym = '', _shifts = DEFAULT_SHIFTS;
+// _sch：畫面上這幾週 { staff: 這個月的人員, cells: {日期: {名字: 班別}}, notes: {日期: 備註} }
+// _docs：讀進來的月份文件（這個月和前後月），存檔時把畫面上的日期分回各月份
+let _sch = null, _docs = {}, _brush = DEFAULT_SHIFTS[0].code;
+let _saveTimer = null, _saving = false, _dirty = new Set();
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  _ud = await getUserData(db, user);
+  _canEdit = _ud.role === 'admin' || _ud.role === 'manager';
+  renderSidebar(_ud, 'schedule.html', auth);
+  document.querySelectorAll('.editor-only').forEach(e => e.classList.toggle('hidden', !_canEdit));
+  try {
+    const c = await getDoc(doc(db, 'scheduleConfig', KITCHEN));
+    if (c.exists() && Array.isArray(c.data().shifts) && c.data().shifts.length) _shifts = c.data().shifts;
+  } catch (e) {}
+  _brush = _shifts[0]?.code || '';
+  await loadMonth(ymOf(todayStr()));
+});
+
+window.addEventListener('beforeunload', e => { if (_dirty.size) { flushSave(); e.preventDefault(); e.returnValue = ''; } });
+
+window.goMonth = async (n) => {
+  await flushSave();
+  loadMonth(n === 0 ? ymOf(todayStr()) : nextYm(_ym, n));
+};
+
+async function loadMonth(ym) {
+  _ym = ym;
+  const [y, m] = ym.split('-');
+  document.getElementById('monthLabel').textContent = `${y} 年 ${Number(m)} 月`;
+  document.getElementById('printTitle').textContent = `${Number(m)} 月份${kitchenName()}班表`;
+  document.getElementById('weeks').innerHTML = '<div class="text-muted text-center" style="padding:24px;">載入中…</div>';
+  setSaveState('');
+  try {
+    const yms = [-2, -1, 0, 1].map(k => nextYm(ym, k));
+    const snaps = await Promise.all(yms.map(m => getDoc(doc(db, 'schedules', docId(m)))));
+    _docs = {};
+    yms.forEach((m, i) => {
+      const d = snaps[i].exists() ? snaps[i].data() : {};
+      _docs[m] = { staff: d.staff || [], cells: d.cells || {}, notes: d.notes || {} };
+    });
+    // 人員：這個月還沒設定就沿用上個月（沒有再往前找一個月）
+    const staff = [0, -1, -2].map(k => _docs[nextYm(ym, k)].staff).find(l => l.length) || [];
+    const days = weeksOf(ym).flat();
+    const cells = {}, notes = {};
+    days.forEach(d => {
+      const src = _docs[ymOf(d)];
+      if (src.cells[d]) cells[d] = { ...src.cells[d] };
+      if (src.notes[d]) notes[d] = src.notes[d];
+    });
+    _sch = { staff: [...staff], cells, notes };
+  } catch (e) {
+    document.getElementById('weeks').innerHTML = `<div class="text-danger text-center" style="padding:24px;">讀取班表失敗：${escHtml(e.message)}</div>`;
+    return;
+  }
+  render();
+}
+
+// ── 畫面 ──
+function render() {
+  renderLegend();
+  const today = todayStr();
+  const weeks = weeksOf(_ym);
+  const editCls = _canEdit ? ' edit' : '';
+  if (!_sch.staff.length) {
+    document.getElementById('weeks').innerHTML = `<div class="text-muted text-center" style="padding:24px;">這個月還沒有排班人員${_canEdit ? '<br><button class="btn btn-primary btn-sm mt-3" onclick="openStaff()">＋ 加入排班人員</button>　<button class="btn btn-outline btn-sm mt-3" onclick="openImport()">📋 從試算表貼上</button>' : ''}</div>`;
+    renderSummary(weeks);
+    return;
+  }
+  document.getElementById('weeks').innerHTML = weeks.map(w => {
+    const head = w.map(d => {
+      const cls = ['d', dow(d) === 0 || dow(d) === 6 ? 'we' : '', ymOf(d) !== _ym ? 'out' : '', d === today ? 'today' : ''].filter(Boolean).join(' ');
+      const note = _sch.notes[d] ? `<span class="note">${escHtml(_sch.notes[d])}</span>` : '';
+      return `<th class="${cls}" data-d="${d}">${WEEKDAYS[dow(d)]}<span class="dd">${mdText(d)}</span>${note}</th>`;
+    }).join('');
+    const rows = _sch.staff.map((n, si) => {
+      const me = n === _ud.name ? ' class="me"' : '';
+      return `<tr${me}><td class="nm" title="${escHtml(n)}">${escHtml(n)}</td>${w.map(d => cellHtml(d, si)).join('')}</tr>`;
+    }).join('');
+    const cnt = w.map(d => { const c = dayCount(d); return `<td>${c.total ? `${c.total} 人` : ''}</td>`; }).join('');
+    return `<div class="wk${editCls}"><table><thead><tr><th class="nm">姓名</th>${head}</tr></thead><tbody>${rows}<tr class="cnt"><td class="nm">上班</td>${cnt}</tr></tbody></table></div>`;
+  }).join('');
+  renderSummary(weeks);
+}
+
+function cellHtml(d, si) {
+  const v = _sch.cells[d]?.[_sch.staff[si]] || '';
+  const c = colorOf(v);
+  const style = c ? ` style="background:${c[0]};color:${c[1]}"` : '';
+  const txt = v && !c ? ' txt' : '';
+  return `<td class="c${txt}" data-d="${d}" data-s="${si}"${style}>${escHtml(v)}</td>`;
+}
+
+function renderLegend() {
+  const brushes = _shifts.map((s, i) => {
+    const c = COLORS[i % COLORS.length];
+    return `<button class="sc-brush${_canEdit && _brush === s.code ? ' on' : ''}" data-b="${escHtml(s.code)}"><span class="code" style="background:${c[0]};color:${c[1]}">${escHtml(s.code)}</span><span class="tm">${escHtml(s.time || '')}</span></button>`;
+  });
+  if (_canEdit) {
+    brushes.push(`<button class="sc-brush${_brush === '__text' ? ' on' : ''}" data-b="__text">✏️ 其他文字</button>`);
+    brushes.push(`<button class="sc-brush${_brush === '' ? ' on' : ''}" data-b="">🧽 清除</button>`);
+  }
+  document.getElementById('legend').innerHTML = brushes.join('');
+}
+
+const isWork = (v) => _shifts.some(s => s.code === v && s.work);
+function dayCount(d) {
+  const by = {};
+  let total = 0;
+  _sch.staff.forEach(n => { const v = _sch.cells[d]?.[n]; if (isWork(v)) { total++; by[v] = (by[v] || 0) + 1; } });
+  return { total, by };
+}
+
+// 統計只算這個月自己的日子（月初、月底那週的前後月日子算在那個月）
+function renderSummary(weeks) {
+  const days = weeks.flat().filter(d => ymOf(d) === _ym);
+  const codes = _shifts.map(s => s.code);
+  const head = `<thead><tr><th>姓名</th>${codes.map(c => `<th>${escHtml(c)}</th>`).join('')}<th>上班天數</th><th>沒排班</th></tr></thead>`;
+  const body = _sch.staff.map(n => {
+    const cnt = {};
+    let work = 0, blank = 0;
+    days.forEach(d => {
+      const v = _sch.cells[d]?.[n] || '';
+      if (!v) blank++;
+      if (codes.includes(v)) cnt[v] = (cnt[v] || 0) + 1;
+      if (isWork(v)) work++;
+    });
+    return `<tr${n === _ud.name ? ' style="background:#FFFBEA"' : ''}><td><b>${escHtml(n)}</b></td>${codes.map(c => `<td>${cnt[c] || ''}</td>`).join('')}<td><b>${work}</b></td><td class="text-muted">${blank}</td></tr>`;
+  }).join('');
+  document.getElementById('sumTable').innerHTML = _sch.staff.length
+    ? head + `<tbody>${body}</tbody>` + `<tfoot><tr><td colspan="${codes.length + 3}" class="text-muted" style="font-size:11px;padding-top:8px">算 ${mdText(days[0])}～${mdText(days[days.length - 1])} 共 ${days.length} 天；月初、月底那週的前後月日子算在那個月</td></tr></tfoot>`
+    : '<tr><td class="text-muted">—</td></tr>';
+}
+
+// ── 編輯 ──
+document.getElementById('legend').addEventListener('click', e => {
+  const b = e.target.closest('.sc-brush');
+  if (!b || !_canEdit) return;
+  _brush = b.dataset.b;
+  renderLegend();
+});
+
+document.getElementById('weeks').addEventListener('click', e => {
+  if (!_canEdit) return;
+  const td = e.target.closest('td.c');
+  if (td) {
+    const d = td.dataset.d, n = _sch.staff[Number(td.dataset.s)];
+    if (_brush === '__text') {
+      askText(`${n}　${mdText(d)}`, _sch.cells[d]?.[n] || '', v => setCell(d, n, v));
+    } else {
+      // 同一個班別再點一次＝清掉
+      const cur = _sch.cells[d]?.[n] || '';
+      setCell(d, n, cur === _brush ? '' : _brush);
+    }
+    return;
+  }
+  const th = e.target.closest('th.d');
+  if (th) {
+    const d = th.dataset.d;
+    askText(`${mdText(d)}（${WEEKDAYS[dow(d)]}）的備註，例：元旦公休`, _sch.notes[d] || '', v => {
+      if (v) _sch.notes[d] = v; else delete _sch.notes[d];
+      render(); queueSave([ymOf(d)]);
+    });
+  }
+});
+
+function setCell(d, n, v) {
+  v = (v || '').trim();
+  if (v) (_sch.cells[d] = _sch.cells[d] || {})[n] = v;
+  else if (_sch.cells[d]) { delete _sch.cells[d][n]; if (!Object.keys(_sch.cells[d]).length) delete _sch.cells[d]; }
+  render();
+  queueSave([ymOf(d)]);
+}
+
+function askText(title, val, ok) {
+  document.getElementById('textTitle').textContent = title;
+  const inp = document.getElementById('textInput');
+  inp.value = val;
+  document.getElementById('textModal').classList.add('open');
+  setTimeout(() => inp.focus(), 50);
+  const done = () => { closeModal('textModal'); ok(inp.value.trim()); };
+  document.getElementById('textOk').onclick = done;
+  inp.onkeydown = e => { if (e.key === 'Enter') done(); };
+}
+
+// ── 儲存：改了 0.8 秒後自動存（整個月一份文件）──
+function setSaveState(t, err) {
+  const el = document.getElementById('saveState');
+  el.textContent = t;
+  el.style.color = err ? 'var(--danger)' : '';
+}
+// yms：改到哪幾個月份的資料（月初、月底那週可能是前後月的）；人員名單算這個月
+function queueSave(yms = [_ym]) {
+  yms.forEach(m => _dirty.add(m));
+  setSaveState('儲存中…');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(flushSave, 800);
+}
+async function flushSave() {
+  clearTimeout(_saveTimer);
+  if (!_dirty.size || _saving) return;
+  _saving = true;
+  const yms = [..._dirty];
+  _dirty.clear();
+  const shown = new Set(weeksOf(_ym).flat());
+  try {
+    await Promise.all(yms.map(m => {
+      const cur = _docs[m];
+      // 這個月份的資料：畫面上的日期用畫面的，其他日期保留原本的
+      const cells = {}, notes = {};
+      Object.entries(cur.cells).forEach(([d, c]) => { if (!shown.has(d)) cells[d] = c; });
+      Object.entries(cur.notes).forEach(([d, n]) => { if (!shown.has(d)) notes[d] = n; });
+      shown.forEach(d => {
+        if (ymOf(d) !== m) return;
+        if (_sch.cells[d] && Object.keys(_sch.cells[d]).length) cells[d] = { ..._sch.cells[d] };
+        if (_sch.notes[d]) notes[d] = _sch.notes[d];
+      });
+      const staff = m === _ym ? [..._sch.staff] : cur.staff;
+      _docs[m] = { staff, cells, notes };
+      return setDoc(doc(db, 'schedules', docId(m)), {
+        kitchen: KITCHEN, month: m, staff, cells, notes, updatedBy: _ud.name, updatedAt: serverTimestamp()
+      });
+    }));
+    setSaveState(_dirty.size ? '儲存中…' : `已儲存 ${new Date().toTimeString().slice(0, 5)}`);
+  } catch (e) {
+    yms.forEach(m => _dirty.add(m));
+    setSaveState('儲存失敗，請檢查網路後再改一次', true);
+    showToast('班表儲存失敗：' + e.message, 'error');
+  }
+  _saving = false;
+  if (_dirty.size) queueSave([]);
+}
+
+// ── 排班人員 ──
+window.openStaff = () => {
+  document.getElementById('staffMonth').textContent = document.getElementById('monthLabel').textContent;
+  document.getElementById('staffText').value = _sch.staff.join('\n');
+  document.getElementById('staffModal').classList.add('open');
+};
+window.saveStaff = () => {
+  const list = [...new Set(document.getElementById('staffText').value.split('\n').map(s => s.trim()).filter(Boolean))];
+  const gone = _sch.staff.filter(n => !list.includes(n));
+  // 只刪這個月的班；月初、月底那週前後月的日子留著（那是前後月的人員）
+  const mine = Object.entries(_sch.cells).filter(([d]) => ymOf(d) === _ym).map(([, c]) => c);
+  const hasShift = gone.filter(n => mine.some(c => c[n]));
+  if (hasShift.length && !confirm(`${hasShift.join('、')} 這個月已經有排班，拿掉會一起刪掉，確定嗎？`)) return;
+  mine.forEach(c => gone.forEach(n => delete c[n]));
+  _sch.staff = list;
+  closeModal('staffModal');
+  render(); queueSave();
+};
+
+// ── 班別設定 ──
+const shiftRow = (s = { code: '', time: '', work: true }) => `<div class="st-row">
+  <input class="form-control" style="width:64px" maxlength="3" value="${escHtml(s.code)}" placeholder="A">
+  <input class="form-control" style="flex:1" value="${escHtml(s.time || '')}" placeholder="6:00～17:00">
+  <label style="width:52px;text-align:center"><input type="checkbox" ${s.work ? 'checked' : ''}></label>
+  <button class="btn btn-outline btn-sm" style="width:28px;padding:5px 0;justify-content:center" onclick="this.parentElement.remove()">✕</button></div>`;
+window.openShifts = () => {
+  document.getElementById('shiftKitchen').textContent = kitchenName();
+  document.getElementById('shiftRows').innerHTML = _shifts.map(shiftRow).join('');
+  document.getElementById('shiftModal').classList.add('open');
+};
+window.addShiftRow = () => document.getElementById('shiftRows').insertAdjacentHTML('beforeend', shiftRow());
+window.saveShifts = async () => {
+  const list = [...document.querySelectorAll('#shiftRows .st-row')].map(r => {
+    const [c, t] = r.querySelectorAll('input.form-control');
+    return { code: c.value.trim(), time: t.value.trim(), work: r.querySelector('input[type=checkbox]').checked };
+  }).filter(s => s.code);
+  if (!list.length) { showToast('至少要有一個班別', 'error'); return; }
+  if (new Set(list.map(s => s.code)).size !== list.length) { showToast('班別代號不能重複', 'error'); return; }
+  try {
+    await setDoc(doc(db, 'scheduleConfig', KITCHEN), { shifts: list, updatedBy: _ud.name, updatedAt: serverTimestamp() }, { merge: true });
+    _shifts = list;
+    if (_brush && _brush !== '__text' && !list.some(s => s.code === _brush)) _brush = list[0].code;
+    closeModal('shiftModal');
+    render();
+    showToast('班別已儲存', 'success');
+  } catch (e) { showToast('儲存失敗：' + e.message, 'error'); }
+};
+
+// ── 從 Google 試算表貼上 ──
+// 格式跟華安試算表一樣：「姓名 一 二 …」一行、「(空) 11月30日 12月1日 …」一行，下面每人一行；一週一塊
+let _parsed = null;
+function parseSheet(text) {
+  const [y, m] = _ym.split('-').map(Number);
+  const yearFor = (mm) => mm - m > 6 ? y - 1 : m - mm > 6 ? y + 1 : y;
+  let dates = null;
+  const staff = [], cells = {}, notes = {}, allDates = new Set();
+  const lines = text.replace(/\r/g, '').split('\n');
+  for (const line of lines) {
+    const col = line.split('\t').slice(0, 8).map(s => s.trim());
+    if (!col.some(Boolean)) continue;
+    if (col[0] === '姓名') continue;
+    const ds = col.slice(1).map(s => { const r = s.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日?/) || s.match(/^(\d{1,2})\/(\d{1,2})$/); return r ? `${yearFor(+r[1])}-${String(r[1]).padStart(2, '0')}-${String(r[2]).padStart(2, '0')}` : ''; });
+    if (!col[0] && ds.some(Boolean)) { dates = ds; ds.forEach(d => d && allDates.add(d)); continue; }
+    if (!col[0] || !dates) continue;   // 標題（例：十二月份華安央廚班表）
+    const n = col[0];
+    if (!staff.includes(n)) staff.push(n);
+    col.slice(1).forEach((v, i) => {
+      const d = dates[i];
+      if (!d || !v) return;
+      // 很長的字（例：元旦公休）當作那天的備註
+      if (v.length > 3 && !_shifts.some(s => s.code === v)) { notes[d] = v; return; }
+      (cells[d] = cells[d] || {})[n] = v;
+    });
+  }
+  const range = new Set(weeksOf(_ym).flat());
+  const inRange = [...allDates].filter(d => range.has(d)).sort();
+  const outside = [...allDates].filter(d => !range.has(d)).length;
+  return { staff, cells, notes, dates: inRange, outside };
+}
+window.openImport = () => {
+  document.getElementById('importText').value = '';
+  previewImport();
+  document.getElementById('importModal').classList.add('open');
+};
+window.previewImport = () => {
+  const t = document.getElementById('importText').value;
+  _parsed = t.trim() ? parseSheet(t) : null;
+  const ok = _parsed && _parsed.dates.length && _parsed.staff.length;
+  document.getElementById('importBtn').disabled = !ok;
+  document.getElementById('importPreview').innerHTML = !t.trim() ? '' : ok
+    ? `找到 ${_parsed.dates.length} 天（${mdText(_parsed.dates[0])}～${mdText(_parsed.dates[_parsed.dates.length - 1])}）、${_parsed.staff.length} 人：${escHtml(_parsed.staff.join('、'))}`
+      + (_parsed.outside ? `<br><span class="text-danger">有 ${_parsed.outside} 天不在這個月的班表範圍，會略過</span>` : '')
+    : '<span class="text-danger">找不到日期或姓名，請連「姓名」和日期那兩行一起複製</span>';
+};
+window.doImport = () => {
+  if (!_parsed) return;
+  const { staff, cells, notes, dates } = _parsed;
+  // 人員：照貼上的順序，原本有、貼上沒有的人排在後面
+  _sch.staff = [...staff, ..._sch.staff.filter(n => !staff.includes(n))];
+  dates.forEach(d => {
+    if (cells[d]) _sch.cells[d] = cells[d]; else delete _sch.cells[d];
+    if (notes[d]) _sch.notes[d] = notes[d]; else delete _sch.notes[d];
+  });
+  // 班別設定裡沒有的代號，提醒去班別設定加上（才會上色、算上班）
+  const extra = [...new Set(Object.values(cells).flatMap(c => Object.values(c)))].filter(v => !_shifts.some(s => s.code === v));
+  closeModal('importModal');
+  render(); queueSave([...new Set([_ym, ...dates.map(ymOf)])]);
+  showToast(`已匯入 ${dates.length} 天` + (extra.length ? `，有不認得的代號：${extra.join('、')}` : ''), 'success');
+};
+</script>
+</body>
+</html>
